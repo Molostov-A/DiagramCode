@@ -498,6 +498,10 @@ window.DC = window.DC || {};
     }, g);
   }
 
+  function canvasBackground() {
+    return document.body.classList.contains('light') ? '#dce0e8' : '#11111b';
+  }
+
   function drawArrowTriangle(g, p1, p2, hollow, color) {
     const dx = p2.x - p1.x, dy = p2.y - p1.y;
     const len = Math.hypot(dx, dy) || 1;
@@ -507,7 +511,7 @@ window.DC = window.DC || {};
     const px = -uy*size*0.6, py = ux*size*0.6;
     el('polygon', {
       points: `${p2.x},${p2.y} ${bx+px},${by+py} ${bx-px},${by-py}`,
-      class: 'arrow', style: `fill:${hollow ? 'var(--canvas-bg)' : color};stroke:${color};stroke-width:1.4`
+      class: 'arrow', style: `fill:${hollow ? canvasBackground() : color};stroke:${color};stroke-width:1.4`
     }, g);
   }
 
@@ -521,7 +525,7 @@ window.DC = window.DC || {};
     const tx = p2.x - ux*size*2, ty = p2.y - uy*size*2;
     el('polygon', {
       points: `${p2.x},${p2.y} ${bx+px},${by+py} ${tx},${ty} ${bx-px},${by-py}`,
-      class: 'arrow', style: `fill:${filled ? color : 'var(--canvas-bg)'};stroke:${color};stroke-width:1.4`
+      class: 'arrow', style: `fill:${filled ? color : canvasBackground()};stroke:${color};stroke-width:1.4`
     }, g);
   }
 

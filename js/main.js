@@ -116,6 +116,7 @@ window.DC = window.DC || {};
     document.body.classList.toggle('light', light);
     themeBtn.textContent = light ? '☀' : '☾';
     themeBtn.title = light ? 'Тёмная тема' : 'Светлая тема';
+    if (DC.render) DC.render();
   }
   applyUITheme(localStorage.getItem('dc-ui-theme') === 'light');
   themeBtn.addEventListener('click', () => {
