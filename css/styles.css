@@ -134,9 +134,9 @@ body.code-collapsed {
 .edge.selected path:not(.edge-hit) { stroke: #f9e2af; stroke-width: 2.5; }
 .edge text { fill: #a6adc8; font-family: 'JetBrains Mono', monospace; font-size: 11px; user-select: none; pointer-events: all; cursor: pointer; }
 .edge.selected text { fill: #f9e2af; }
-.edge .arrow { fill: #a6adc8; pointer-events: none; }
-.edge:hover .arrow { fill: #cdd5f9; }
-.edge.selected .arrow { fill: #f9e2af; }
+.edge .arrow { fill: #a6adc8; stroke: #a6adc8; stroke-width: 1.4; pointer-events: none; }
+.edge:hover .arrow { fill: #cdd5f9; stroke: #cdd5f9; }
+.edge.selected .arrow { fill: #f9e2af; stroke: #f9e2af; }
 .edge.dashed path { stroke-dasharray: 5 4; }
 .edge path.edge-hit { fill: none; stroke: transparent; stroke-width: 22; cursor: pointer; }
 
@@ -434,9 +434,9 @@ body.light .edge:hover path:not(.edge-hit) { stroke: #1e66f5; }
 body.light .edge.selected path:not(.edge-hit) { stroke: #df8e1d; }
 body.light .edge text { fill: #6c6f85; }
 body.light .edge.selected text { fill: #df8e1d; }
-body.light .edge .arrow { fill: #6c6f85; }
-body.light .edge:hover .arrow { fill: #1e66f5; }
-body.light .edge.selected .arrow { fill: #df8e1d; }
+body.light .edge .arrow { fill: #6c6f85; stroke: #6c6f85; }
+body.light .edge:hover .arrow { fill: #1e66f5; stroke: #1e66f5; }
+body.light .edge.selected .arrow { fill: #df8e1d; stroke: #df8e1d; }
 body.light .edge-wp { fill: #1e66f5; stroke: #ffffff; }
 body.light .edge-ep { fill: #40a02b; stroke: #ffffff; }
 body.light .port { fill: #1e66f5; stroke: #ffffff; }

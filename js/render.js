@@ -428,7 +428,7 @@ window.DC = window.DC || {};
     if (st.color) pathS.push(`stroke:${st.color}`);
     if (st.strokeWidth !== undefined) pathS.push(`stroke-width:${st.strokeWidth}`);
     const labelS = textStyleAttr(st);
-    const arrowColor = st.color || '#a6adc8';
+    const arrowColor = st.color || null;
 
     el('path', { d, class: 'edge-hit' }, g);
     el('path', { d, style: pathS.join(';') || undefined }, g);
@@ -494,7 +494,7 @@ window.DC = window.DC || {};
     const a2 = Math.atan2(-dy, -dx) - Math.PI/6;
     el('polygon', {
       points: `${p2.x},${p2.y} ${p2.x + Math.cos(a1)*size},${p2.y + Math.sin(a1)*size} ${p2.x + Math.cos(a2)*size},${p2.y + Math.sin(a2)*size}`,
-      class: 'arrow', style: `fill:${color}`
+      class: 'arrow', style: color ? `fill:${color}` : undefined
     }, g);
   }
 
@@ -509,9 +509,13 @@ window.DC = window.DC || {};
     const size = 11;
     const bx = p2.x - ux*size, by = p2.y - uy*size;
     const px = -uy*size*0.6, py = ux*size*0.6;
+    const s = [];
+    if (hollow) s.push(`fill:${canvasBackground()}`);
+    else if (color) s.push(`fill:${color}`);
+    if (color) { s.push(`stroke:${color}`); s.push('stroke-width:1.4'); }
     el('polygon', {
       points: `${p2.x},${p2.y} ${bx+px},${by+py} ${bx-px},${by-py}`,
-      class: 'arrow', style: `fill:${hollow ? canvasBackground() : color};stroke:${color};stroke-width:1.4`
+      class: 'arrow', style: s.join(';') || undefined
     }, g);
   }
 
@@ -523,9 +527,13 @@ window.DC = window.DC || {};
     const bx = p2.x - ux*size, by = p2.y - uy*size;
     const px = -uy*size*0.55, py = ux*size*0.55;
     const tx = p2.x - ux*size*2, ty = p2.y - uy*size*2;
+    const s = [];
+    if (filled) { if (color) s.push(`fill:${color}`); }
+    else s.push(`fill:${canvasBackground()}`);
+    if (color) { s.push(`stroke:${color}`); s.push('stroke-width:1.4'); }
     el('polygon', {
       points: `${p2.x},${p2.y} ${bx+px},${by+py} ${tx},${ty} ${bx-px},${by-py}`,
-      class: 'arrow', style: `fill:${filled ? color : canvasBackground()};stroke:${color};stroke-width:1.4`
+      class: 'arrow', style: s.join(';') || undefined
     }, g);
   }
 
