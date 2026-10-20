@@ -47,6 +47,17 @@ body.code-collapsed {
   gap: 8px;
   padding: 8px 0;
 }
+#code-panel { position: relative; }
+#code-resize {
+  position: absolute;
+  top: 0; right: -4px; bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+}
+#code-resize:hover, #code-resize.resizing { background: #89b4fa66; }
+#code-panel.collapsed #code-resize { display: none; }
 
 #palette { padding: 8px; overflow-y: auto; }
 .palette-section { margin-bottom: 14px; }
@@ -107,6 +118,10 @@ body.code-collapsed {
 .flow-node.io .shape, .flow-node.data .shape { stroke: #cba6f7; }
 .flow-node.connector .shape { stroke: #f38ba8; }
 .flow-node.node-body { cursor: move; }
+.node-id {
+  fill: #6c7086; font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  user-select: none; pointer-events: none;
+}
 
 .edge path { fill: none; stroke: #a6adc8; stroke-width: 1.8; pointer-events: stroke; }
 .edge:hover path:not(.edge-hit) { stroke: #cdd5f9; stroke-width: 2.4; }
@@ -149,8 +164,33 @@ body.code-collapsed {
 
 #temp-edge { stroke: #f9e2af; stroke-width: 2; stroke-dasharray: 4 3; fill: none; pointer-events: none; }
 
-#properties { padding: 12px; overflow-y: auto; font-size: 12px; }
+#properties { padding: 12px; overflow-y: auto; font-size: 12px; flex: 1; }
 #properties .hint { color: #6c7086; font-style: italic; font-size: 11px; }
+
+#right-column {
+  display: flex; flex-direction: column; overflow: hidden;
+  border-right: none;
+}
+#props-panel { flex: 1; min-height: 0; border-right: none; border-bottom: 1px solid #45475a; }
+#spec-panel { flex-shrink: 0; max-height: 40%; }
+#spec-panel.collapsed #spec { display: none; }
+#spec { padding: 8px 12px; overflow-y: auto; font-size: 11px; }
+#spec .hint { color: #6c7086; font-style: italic; }
+.spec-section { margin-bottom: 8px; }
+.spec-section h6 {
+  font-size: 10px; color: #a6adc8; text-transform: uppercase;
+  letter-spacing: 0.5px; margin-bottom: 4px; border-bottom: 1px solid #313244; padding-bottom: 2px;
+}
+.spec-row {
+  display: flex; gap: 6px; padding: 2px 0; cursor: pointer;
+  border-radius: 3px; color: #cdd6f4;
+}
+.spec-row:hover { background: #313244; }
+.spec-row.selected { background: #45475a; }
+.spec-row .sid { color: #89b4fa; font-family: 'JetBrains Mono', monospace; min-width: 28px; }
+.spec-row .sname { font-weight: 600; }
+.spec-row .stype { color: #a6adc8; }
+.spec-row .stext { color: #6c7086; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .prop-group { margin-bottom: 12px; }
 .prop-group label {
   display: block; font-size: 10px; color: #a6adc8;

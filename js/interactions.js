@@ -386,10 +386,11 @@ window.DC = window.DC || {};
 
       const pt = svgPoint(e);
       const name = generateName(type);
+      const id = ++state.lastId;
 
       if (type === 'class') {
         state.classes[name] = {
-          kind: 'class', name, stereotype: '', attributes: ['+id: int'], methods: ['+action(): void'],
+          kind: 'class', id, name, stereotype: '', attributes: ['+id: int'], methods: ['+action(): void'],
           x: pt.x, y: pt.y
         };
       } else {
@@ -399,7 +400,7 @@ window.DC = window.DC || {};
           prep: 'setup', manual: 'step', note: 'text', connector: ''
         }[type] || '';
         state.nodes[name] = {
-          kind: 'node', type, name, text: defaultText,
+          kind: 'node', id, type, name, text: defaultText,
           x: pt.x, y: pt.y
         };
       }
@@ -413,4 +414,41 @@ window.DC = window.DC || {};
   DC.svgPoint = svgPoint;
   DC.generateName = generateName;
   DC.setupInteractions = setupInteractions;
+})();
+
+(function () {
+  const PALETTE_W = 180;
+  const CODE_MIN = 200;
+  const handle = document.getElementById('code-resize');
+  const codePanel = document.getElementById('code-panel');
+  if (!handle || !codePanel) return;
+
+  let resizing = false;
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    resizing = true;
+    handle.classList.add('resizing');
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!resizing) return;
+    const max = Math.max(CODE_MIN, window.innerWidth * 0.55);
+    const w = Math.min(max, Math.max(CODE_MIN, e.clientX - PALETTE_W));
+    document.body.classList.remove('code-collapsed');
+    codePanel.classList.remove('collapsed');
+    document.body.style.gridTemplateColumns = `${PALETTE_W}px ${w}px 1fr 240px`;
+    const btn = document.getElementById('toggle-code');
+    if (btn) { btn.textContent = '«'; btn.title = 'Свернуть'; }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!resizing) return;
+    resizing = false;
+    handle.classList.remove('resizing');
+  });
+
+  handle.addEventListener('dblclick', () => {
+    document.body.style.gridTemplateColumns = '';
+  });
 })();

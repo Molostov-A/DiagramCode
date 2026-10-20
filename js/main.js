@@ -10,11 +10,12 @@ window.DC = window.DC || {};
     const text = codeEl.value;
 
     try {
-      const { classes, nodes, edges, errors } = DC.parseDSL(text);
+      const { classes, nodes, edges, errors, lastId } = DC.parseDSL(text);
 
       state.classes = classes;
       state.nodes = nodes;
       state.edges = edges;
+      state.lastId = Math.max(state.lastId || 0, lastId || 0);
 
       if (errors.length) {
         statusEl.textContent = `⚠ ${errors.length}`;
@@ -65,7 +66,7 @@ window.DC = window.DC || {};
 
   document.getElementById('btn-clear').addEventListener('click', () => {
     if (!confirm('Очистить всё?')) return;
-    state.classes = {}; state.nodes = {}; state.edges = []; state.selected = null;
+    state.classes = {}; state.nodes = {}; state.edges = []; state.selected = null; state.lastId = 0;
     codeEl.value = '';
     DC.render();
   });
@@ -74,45 +75,56 @@ window.DC = window.DC || {};
     const panel = document.getElementById('code-panel');
     const collapsed = panel.classList.toggle('collapsed');
     document.body.classList.toggle('code-collapsed', collapsed);
+    if (collapsed) document.body.style.gridTemplateColumns = '';
     const btn = document.getElementById('toggle-code');
     btn.textContent = collapsed ? '»' : '«';
     btn.title = collapsed ? 'Развернуть' : 'Свернуть';
   });
 
-  const EXAMPLE = `start Start
-io Ввод: логин и пароль
-process Проверка: validate()
-decision Корректно? ok?
-predef API: authService.login()
-decision Успех? token?
-process Сохранить: saveSession()
-io Ошибка: showError()
-end Finish
+  document.getElementById('toggle-spec').addEventListener('click', () => {
+    const panel = document.getElementById('spec-panel');
+    const collapsed = panel.classList.toggle('collapsed');
+    const btn = document.getElementById('toggle-spec');
+    btn.textContent = collapsed ? '▸' : '▾';
+    btn.title = collapsed ? 'Развернуть' : 'Свернуть';
+  });
 
-flow Start.right -> Ввод.left
-flow Ввод.right -> Проверка.left
-flow Проверка.right -> Корректно.left
-flow Корректно.right -> API.left {rect} : да
-flow Корректно.bottom -> Ошибка.top {smooth} : нет
-flow API.right -> Успех.left
-flow Успех.right -> Сохранить.left : да
-flow Успех.bottom -> Ошибка.top : нет
-flow Сохранить.right -> Finish.left
-flow Ошибка.right -> Finish.bottom
+  const EXAMPLE = `start #1 Start
+io #2 Ввод: логин и пароль
+process #3 Проверка: validate()
+decision #4 Корректно? ok?
+predef #5 API: authService.login()
+decision #6 Успех? token?
+process #7 Сохранить: saveSession()
+io #8 Ошибка: showError()
+end #9 Finish
+
+flow #1.right -> #2.left
+flow #2.right -> #3.left
+flow #3.right -> #4.left
+flow #4.right -> #5.left {rect} : да
+flow #4.bottom -> #8.top {smooth} : нет
+flow #5.right -> #6.left
+flow #6.right -> #7.left : да
+flow #6.bottom -> #8.top : нет
+flow #7.right -> #9.left
+flow #8.right -> #9.bottom
 
 # Расположение
-layout Start 80 60
-layout Ввод 340 60
-layout Проверка 600 60
-layout Корректно 860 60
-layout API 1120 60
-layout Успех 1380 60
-layout Сохранить 1640 60
-layout Ошибка 1640 260
-layout Finish 1900 60
+layout #1 80 60
+layout #2 340 60
+layout #3 600 60
+layout #4 860 60
+layout #5 1120 60
+layout #6 1380 60
+layout #7 1640 60
+layout #8 1640 260
+layout #9 1900 60
 `;
 
   DC.setupInteractions();
   codeEl.value = EXAMPLE;
+  parseAndRender();
+  DC.updateCodeFromState();
   parseAndRender();
 })();

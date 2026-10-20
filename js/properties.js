@@ -7,6 +7,88 @@ DC.escapeHtml = function (s) {
   }[c]));
 };
 
+DC.renderSpec = function () {
+  const container = document.getElementById('spec');
+  if (!container) return;
+  const state = DC.state;
+  const items = [...Object.values(state.classes), ...Object.values(state.nodes)]
+    .sort((a, b) => (a.id || 0) - (b.id || 0));
+
+  if (!items.length) {
+    container.innerHTML = '<div class="hint">Пусто</div>';
+    return;
+  }
+
+  const rows = items.map(u => {
+    const isClass = u.kind === 'class';
+    const type = isClass ? 'class' : u.type;
+    const text = isClass
+      ? (u.attributes.length || u.methods.length ? `${u.attributes.length} атр. / ${u.methods.length} мет.` : '')
+      : (u.text || '');
+    const inN = state.edges.filter(e => e.to === u.name).length;
+    const outN = state.edges.filter(e => e.from === u.name).length;
+    const sel = state.selected?.id === u.name ? ' selected' : '';
+    return `<div class="spec-row${sel}" data-kind="${u.kind}" data-name="${DC.escapeHtml(u.name)}">
+      <span class="sid">#${u.id}</span>
+      <span class="stype">${DC.escapeHtml(type)}</span>
+      <span class="sname">${DC.escapeHtml(u.name)}</span>
+      <span class="stext">${DC.escapeHtml(text)}</span>
+      <span class="stype" title="входящие / исходящие">${inN}↓ ${outN}↑</span>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = `<div class="spec-section">
+    <h6>Блоки (${items.length})</h6>
+    ${rows}
+  </div>
+  ${renderSpecEdges()}`;
+
+  container.querySelectorAll('.spec-row[data-kind]').forEach(row => {
+    row.addEventListener('click', () => {
+      state.selected = { kind: row.dataset.kind, id: row.dataset.name };
+      DC.render();
+    });
+  });
+  container.querySelectorAll('.spec-row[data-edge-idx]').forEach(row => {
+    row.addEventListener('click', () => {
+      state.selected = { kind: 'edge', id: parseInt(row.dataset.edgeIdx) };
+      DC.render();
+    });
+  });
+};
+
+function renderSpecEdges() {
+  const state = DC.state;
+  const all = { ...state.classes, ...state.nodes };
+  const edges = state.edges
+    .map((ed, idx) => ({ ed, idx }))
+    .filter(({ ed }) => all[ed.from] && all[ed.to]);
+  if (!edges.length) return '';
+
+  const rows = edges.map(({ ed, idx }) => {
+    const a = all[ed.from], b = all[ed.to];
+    const sides = (ed.fromSide || ed.toSide)
+      ? `${ed.fromSide || 'авто'}→${ed.toSide || 'авто'}`
+      : '';
+    const meta = [ed.type, ed.label, ed.route, sides].filter(Boolean).join(' · ');
+    const selected = state.selected?.kind === 'edge' && state.selected.id === idx ? ' selected' : '';
+    const arrow = ed.type === 'flow' || ed.type === 'flowDashed' ? '→' : '—';
+    return `<div class="spec-row${selected}" data-edge-idx="${idx}">
+      <span class="sid">#${a.id}</span>
+      <span class="sname">${DC.escapeHtml(a.name)}</span>
+      <span class="stype">${arrow}</span>
+      <span class="sid">#${b.id}</span>
+      <span class="sname">${DC.escapeHtml(b.name)}</span>
+      <span class="stext">${DC.escapeHtml(meta)}</span>
+    </div>`;
+  }).join('');
+
+  return `<div class="spec-section">
+    <h6>Связи (${edges.length})</h6>
+    ${rows}
+  </div>`;
+}
+
 DC.renderProperties = function () {
   const container = document.getElementById('properties');
   const state = DC.state;
@@ -22,6 +104,10 @@ DC.renderProperties = function () {
     const cls = state.classes[id];
     if (!cls) return container.innerHTML = '<div class="hint">не найдено</div>';
     container.innerHTML = `
+      <div class="prop-group">
+        <label>ID</label>
+        <input value="#${cls.id}" disabled />
+      </div>
       <div class="prop-group">
         <label>Имя класса</label>
         <input id="prop-name" value="${DC.escapeHtml(cls.name)}" />
@@ -47,6 +133,10 @@ DC.renderProperties = function () {
     const node = state.nodes[id];
     if (!node) return container.innerHTML = '<div class="hint">не найдено</div>';
     container.innerHTML = `
+      <div class="prop-group">
+        <label>ID</label>
+        <input value="#${node.id}" disabled />
+      </div>
       <div class="prop-group">
         <label>Тип узла</label>
         <select id="prop-type">

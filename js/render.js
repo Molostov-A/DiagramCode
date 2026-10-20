@@ -84,6 +84,7 @@ window.DC = window.DC || {};
     }
 
     addPorts(g, cls, width, height);
+    el('text', { x: 0, y: -6, class: 'node-id', text: `#${cls.id}` }, g);
   }
 
   function drawFlowNode(node) {
@@ -156,6 +157,7 @@ window.DC = window.DC || {};
     }
 
     addPorts(g, node, w, h);
+    el('text', { x: 0, y: -6, class: 'node-id', text: `#${node.id}` }, g);
   }
 
   function addPorts(g, node, w, h) {
@@ -439,6 +441,7 @@ window.DC = window.DC || {};
     }
 
     DC.renderProperties();
+    DC.renderSpec();
   }
 
   Object.assign(DC, {

@@ -5,15 +5,14 @@ window.DC = window.DC || {};
   const state = DC.state;
 
   function stripNode(n) {
-    const { kind, name, type, stereotype, attributes, methods, text, x, y } = n;
-    const out = { kind, name, x: Math.round(n.x), y: Math.round(n.y) };
-    if (kind === 'class') {
-      out.stereotype = stereotype || '';
-      out.attributes = attributes || [];
-      out.methods = methods || [];
+    const out = { id: n.id, kind: n.kind, name: n.name, x: Math.round(n.x), y: Math.round(n.y) };
+    if (n.kind === 'class') {
+      out.stereotype = n.stereotype || '';
+      out.attributes = n.attributes || [];
+      out.methods = n.methods || [];
     } else {
-      out.type = type;
-      out.text = text || '';
+      out.type = n.type;
+      out.text = n.text || '';
     }
     return out;
   }
@@ -21,7 +20,8 @@ window.DC = window.DC || {};
   function exportJSON() {
     const data = {
       format: 'DiagramCode',
-      version: 1,
+      version: 2,
+      lastId: state.lastId,
       classes: Object.values(state.classes).map(stripNode),
       nodes: Object.values(state.nodes).map(stripNode),
       edges: state.edges.map(ed => ({
@@ -68,10 +68,17 @@ window.DC = window.DC || {};
       }
 
       const classes = {}, nodes = {};
+      let maxId = 0;
+      const nextId = () => {
+        const v = ++maxId;
+        return v;
+      };
       data.classes.forEach(c => {
         if (!c.name) return;
+        const id = Number.isInteger(c.id) ? c.id : nextId();
+        if (id > maxId) maxId = id;
         classes[c.name] = {
-          kind: 'class', name: c.name, stereotype: c.stereotype || '',
+          kind: 'class', id, name: c.name, stereotype: c.stereotype || '',
           attributes: Array.isArray(c.attributes) ? c.attributes : [],
           methods: Array.isArray(c.methods) ? c.methods : [],
           x: c.x || 100, y: c.y || 100
@@ -79,8 +86,10 @@ window.DC = window.DC || {};
       });
       data.nodes.forEach(n => {
         if (!n.name || !DC.FLOW_KEYWORDS.includes(n.type)) return;
+        const id = Number.isInteger(n.id) ? n.id : nextId();
+        if (id > maxId) maxId = id;
         nodes[n.name] = {
-          kind: 'node', type: n.type, name: n.name, text: n.text || '',
+          kind: 'node', id, type: n.type, name: n.name, text: n.text || '',
           x: n.x || 100, y: n.y || 100
         };
       });
@@ -98,6 +107,7 @@ window.DC = window.DC || {};
       state.classes = classes;
       state.nodes = nodes;
       state.edges = edges;
+      state.lastId = Math.max(data.lastId || 0, maxId);
       state.selected = null;
       DC.updateCodeFromState();
       DC.render();

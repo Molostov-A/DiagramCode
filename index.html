@@ -88,6 +88,7 @@
     <input type="file" id="import-file" accept=".json,application/json" hidden />
   </div>
   <textarea id="code" spellcheck="false"></textarea>
+  <div id="code-resize" title="Тяните, чтобы изменить ширину · двойной клик — сброс"></div>
 </div>
 
 <!-- ========== ХОЛСТ ========== -->
@@ -101,11 +102,23 @@
   </div>
 </div>
 
-<!-- ========== ПАНЕЛЬ СВОЙСТВ ========== -->
-<div class="panel">
-  <div class="panel-header">Свойства</div>
-  <div id="properties">
-    <div class="hint">Выберите узел или связь на холсте</div>
+<!-- ========== ПРАВАЯ КОЛОНКА ========== -->
+<div id="right-column">
+  <!-- ========== ПАНЕЛЬ СВОЙСТВ ========== -->
+  <div class="panel" id="props-panel">
+    <div class="panel-header">Свойства</div>
+    <div id="properties">
+      <div class="hint">Выберите узел или связь на холсте</div>
+    </div>
+  </div>
+
+  <!-- ========== СПЕЦИФИКАЦИЯ ========== -->
+  <div class="panel" id="spec-panel">
+    <div class="panel-header">
+      <span>Спецификация</span>
+      <button id="toggle-spec" class="panel-toggle" title="Свернуть">▾</button>
+    </div>
+    <div id="spec"><div class="hint">Пусто</div></div>
   </div>
 </div>
 
