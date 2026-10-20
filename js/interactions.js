@@ -56,9 +56,172 @@ window.DC = window.DC || {};
     const canvas = DC.canvas;
     const canvasWrap = DC.canvasWrap;
     let pan = null;
+    let panCandidate = null;
+    let pinch = null;
+    let tapStart = null;
+    let lastTap = null;
+    const pointers = new Map();
 
-    canvas.addEventListener('mousedown', e => {
+    function elementAt(e) {
+      return document.elementFromPoint(e.clientX, e.clientY);
+    }
+
+    function zoomAt(clientX, clientY, newZoom) {
+      const z = Math.min(4, Math.max(0.1, newZoom));
+      if (z === zoom) return;
+      const rect = canvasWrap.getBoundingClientRect();
+      const wx = clientX - rect.left;
+      const wy = clientY - rect.top;
+      const px = (canvasWrap.scrollLeft + wx) / zoom;
+      const py = (canvasWrap.scrollTop + wy) / zoom;
+      zoom = z;
+      applyZoom();
+      canvasWrap.scrollLeft = px * zoom - wx;
+      canvasWrap.scrollTop = py * zoom - wy;
+    }
+
+    function zoomBy(factor) {
+      const rect = canvasWrap.getBoundingClientRect();
+      zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, zoom * factor);
+    }
+
+    function centerPt() {
+      return {
+        x: (canvasWrap.scrollLeft + canvasWrap.clientWidth / 2) / zoom,
+        y: (canvasWrap.scrollTop + canvasWrap.clientHeight / 2) / zoom
+      };
+    }
+
+    function createNode(type, pt) {
+      const name = generateName(type);
+      const id = ++state.lastId;
+
+      if (type === 'class') {
+        state.classes[name] = {
+          kind: 'class', id, name, stereotype: '', attributes: ['+id: int'], methods: ['+action(): void'],
+          x: pt.x, y: pt.y
+        };
+      } else {
+        const defaultText = {
+          start: '', end: '', process: 'action()', decision: 'условие?',
+          io: 'read()', data: 'payload', predef: 'call()', doc: 'report',
+          prep: 'setup', manual: 'step', note: 'text', connector: ''
+        }[type] || '';
+        state.nodes[name] = {
+          kind: 'node', id, type, name, text: defaultText,
+          x: pt.x, y: pt.y
+        };
+      }
+
+      state.selected = { kind: type === 'class' ? 'class' : 'node', id: name };
+      DC.updateCodeFromState();
+      DC.render();
+    }
+
+    function tapKey(el) {
+      if (!el || !el.closest) return null;
+      if (el.closest('.port, .edge-wp, .edge-ep')) return null;
+      const edgeEl = el.closest('.edge');
+      if (edgeEl) return 'edge:' + edgeEl.dataset.idx;
+      const nodeEl = el.closest('[data-kind="class"], [data-kind="node"]');
+      if (nodeEl) return nodeEl.dataset.kind + ':' + nodeEl.dataset.name;
+      return null;
+    }
+
+    function activateEdit(target) {
+      if (!target || !target.closest) return;
+      const edgeEl = target.closest('.edge');
+      if (edgeEl) {
+        const idx = parseInt(edgeEl.dataset.idx);
+        const ed = state.edges[idx];
+        if (!ed) return;
+        const newLabel = prompt('Подпись связи (пусто — удалить):', ed.label || '');
+        if (newLabel !== null) {
+          ed.label = newLabel.trim();
+          DC.updateCodeFromState();
+          DC.render();
+        }
+        return;
+      }
+      const nodeEl = target.closest('[data-kind="class"], [data-kind="node"]');
+      if (!nodeEl) return;
+      const kind = nodeEl.dataset.kind;
+      const name = nodeEl.dataset.name;
+      const newName = prompt('Переименовать:', name);
+      if (!newName || newName === name) return;
+      const store = kind === 'class' ? state.classes : state.nodes;
+      if (store[newName]) return alert('Имя занято');
+      const obj = store[name];
+      obj.name = newName;
+      store[newName] = obj;
+      delete store[name];
+      state.edges.forEach(ed => {
+        if (ed.from === name) ed.from = newName;
+        if (ed.to === name) ed.to = newName;
+      });
+      state.selected = { kind, id: newName };
+      DC.updateCodeFromState();
+      DC.render();
+    }
+
+    function cancelGestures() {
+      if (epDrag) { epDrag.tempPath?.remove(); epDrag = null; }
+      if (linkDrag) { linkDrag.tempPath?.remove(); linkDrag = null; }
+      if (wpDrag) wpDrag = null;
+      drag = null;
+      pan = null;
+      panCandidate = null;
+      tapStart = null;
+      canvas.classList.remove('dragging');
+      canvasWrap.classList.remove('panning');
+    }
+
+    // --- отслеживание пальцев / пинч-зум ---
+    document.addEventListener('pointerdown', e => {
+      if (!canvasWrap.contains(e.target)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) {
+        cancelGestures();
+        const pts = [...pointers.values()];
+        pinch = { d: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1, z: zoom };
+      }
+    }, true);
+
+    document.addEventListener('pointermove', e => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (!pinch) return;
+      const pts = [...pointers.values()].slice(0, 2);
+      if (pts.length < 2) return;
+      const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+      zoomAt((pts[0].x + pts[1].x) / 2, (pts[0].y + pts[1].y) / 2, pinch.z * (d / pinch.d));
+    }, true);
+
+    function forgetPointer(e) {
+      pointers.delete(e.pointerId);
+      if (pinch && pointers.size < 2) pinch = null;
+    }
+    document.addEventListener('pointerup', forgetPointer, true);
+    document.addEventListener('pointercancel', e => {
+      forgetPointer(e);
+      cancelGestures();
+      lastTap = null;
+    }, true);
+
+    // --- нажатие на холст ---
+    canvas.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
+      if (pinch || pointers.size > 1) return;
+      if (e.pointerType !== 'mouse') {
+        e.preventDefault();
+        tapStart = {
+          pointerId: e.pointerId, x: e.clientX, y: e.clientY,
+          moved: false, key: tapKey(e.target)
+        };
+        // render() заменяет DOM-узлы — фиксируем указатель за canvas,
+        // чтобы жест не оборвался при удалении первоначальной цели
+        try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+      }
 
       const epEl = e.target.closest('.edge-ep');
       if (epEl) {
@@ -69,8 +232,7 @@ window.DC = window.DC || {};
         if (!ed) return;
         state.selected = { kind: 'edge', id: edgeIdx };
         epDrag = { edgeIdx, end: epEl.dataset.end, startX: e.clientX, startY: e.clientY, moved: false };
-        const tempPath = DC.el('path', { id: 'temp-edge', d: '' }, canvas);
-        epDrag.tempPath = tempPath;
+        epDrag.tempPath = DC.el('path', { id: 'temp-edge', d: '' }, canvas);
         canvas.classList.add('dragging');
         return;
       }
@@ -103,8 +265,8 @@ window.DC = window.DC || {};
           from: fromName, fromSide: portEl.dataset.portSide || null,
           startX: e.clientX, startY: e.clientY, moved: false
         };
-        const tempPath = DC.el('path', { id: 'temp-edge', d: '' }, canvas);
-        linkDrag.tempPath = tempPath;
+        linkDrag.tempPath = DC.el('path', { id: 'temp-edge', d: '' }, canvas);
+        canvas.classList.add('dragging');
         return;
       }
 
@@ -117,19 +279,30 @@ window.DC = window.DC || {};
         state.selected = { kind, id: name };
         const pt = svgPoint(e);
         const obj = kind === 'class' ? state.classes[name] : state.nodes[name];
-        drag = { kind, name, offsetX: pt.x - obj.x, offsetY: pt.y - obj.y };
+        drag = { kind, name, offsetX: pt.x - obj.x, offsetY: pt.y - obj.y, moved: false };
         canvas.classList.add('dragging');
         DC.render();
       } else if (edgeEl) {
         state.selected = { kind: 'edge', id: parseInt(edgeEl.dataset.idx) };
         DC.render();
       } else {
-        state.selected = null;
-        DC.render();
+        panCandidate = {
+          pointerId: e.pointerId, x: e.clientX, y: e.clientY,
+          left: canvasWrap.scrollLeft, top: canvasWrap.scrollTop,
+          moved: false
+        };
       }
     });
 
-    canvas.addEventListener('mousemove', e => {
+    // --- перемещение ---
+    document.addEventListener('pointermove', e => {
+      if (pinch) return;
+
+      if (tapStart && e.pointerId === tapStart.pointerId &&
+          Math.hypot(e.clientX - tapStart.x, e.clientY - tapStart.y) > 6) {
+        tapStart.moved = true;
+      }
+
       const pt = svgPoint(e);
 
       if (epDrag) {
@@ -182,21 +355,38 @@ window.DC = window.DC || {};
         return;
       }
 
-      if (!drag) return;
-      const obj = drag.kind === 'class' ? state.classes[drag.name] : state.nodes[drag.name];
-      obj.x = pt.x - drag.offsetX;
-      obj.y = pt.y - drag.offsetY;
-      DC.render();
+      if (drag) {
+        const obj = drag.kind === 'class' ? state.classes[drag.name] : state.nodes[drag.name];
+        obj.x = pt.x - drag.offsetX;
+        obj.y = pt.y - drag.offsetY;
+        drag.moved = true;
+        DC.render();
+        return;
+      }
+
+      if (panCandidate && !pan && e.pointerId === panCandidate.pointerId &&
+          Math.hypot(e.clientX - panCandidate.x, e.clientY - panCandidate.y) > 4) {
+        panCandidate.moved = true;
+        pan = { pointerId: panCandidate.pointerId, x: panCandidate.x, y: panCandidate.y,
+                left: panCandidate.left, top: panCandidate.top };
+        canvasWrap.classList.add('panning');
+      }
+      if (pan && e.pointerId === pan.pointerId) {
+        canvasWrap.scrollLeft = pan.left - (e.clientX - pan.x);
+        canvasWrap.scrollTop = pan.top - (e.clientY - pan.y);
+      }
     });
 
-    window.addEventListener('mouseup', e => {
+    // --- отпускание ---
+    document.addEventListener('pointerup', e => {
       if (epDrag) {
         epDrag.tempPath?.remove();
         const moved = epDrag.moved;
         const ed = state.edges[epDrag.edgeIdx];
         if (ed && moved) {
-          const portEl = e.target.closest?.('.port');
-          const nodeEl = e.target.closest?.('[data-kind="class"], [data-kind="node"]');
+          const hit = elementAt(e);
+          const portEl = hit?.closest?.('.port');
+          const nodeEl = hit?.closest?.('[data-kind="class"], [data-kind="node"]');
           if (portEl) {
             const name = portEl.dataset.portNode;
             const side = portEl.dataset.portSide || null;
@@ -226,120 +416,93 @@ window.DC = window.DC || {};
         epDrag = null;
         canvas.classList.remove('dragging');
         DC.render();
-        return;
-      }
-      if (wpDrag) {
+      } else if (wpDrag) {
         wpDrag = null;
         canvas.classList.remove('dragging');
         DC.updateCodeFromState();
-        return;
-      }
-      if (linkDrag) {
+      } else if (linkDrag) {
         if (!linkDrag.moved) {
           cyclePortSide(linkDrag.from, linkDrag.fromSide);
           linkDrag.tempPath?.remove();
           linkDrag = null;
-          return;
-        }
-        const targetEl = e.target.closest?.('[data-kind="class"], [data-kind="node"]');
-        if (targetEl) {
-          const targetName = targetEl.dataset.name;
-          if (targetName !== linkDrag.from) {
-            const fromNode = DC.getNode(linkDrag.from);
-            const toNode = DC.getNode(targetName);
-            let type = 'flow';
-            if (fromNode.kind === 'class' && toNode.kind === 'class') type = 'assoc';
-            const toBox = toNode._box || (toNode.kind === 'class' ? DC.classBox(toNode) : DC.flowNodeBox(toNode));
-            const toSide = DC.nearestSide(toNode, toBox, svgPoint(e));
-            state.edges.push({
-              from: linkDrag.from, fromSide: linkDrag.fromSide || null,
-              to: targetName, toSide,
-              type, label: ''
-            });
-            DC.updateCodeFromState();
-            DC.render();
+          canvas.classList.remove('dragging');
+        } else {
+          const targetEl = elementAt(e)?.closest?.('[data-kind="class"], [data-kind="node"]');
+          if (targetEl) {
+            const targetName = targetEl.dataset.name;
+            if (targetName !== linkDrag.from) {
+              const fromNode = DC.getNode(linkDrag.from);
+              const toNode = DC.getNode(targetName);
+              let type = 'flow';
+              if (fromNode.kind === 'class' && toNode.kind === 'class') type = 'assoc';
+              const toBox = toNode._box || (toNode.kind === 'class' ? DC.classBox(toNode) : DC.flowNodeBox(toNode));
+              const toSide = DC.nearestSide(toNode, toBox, svgPoint(e));
+              state.edges.push({
+                from: linkDrag.from, fromSide: linkDrag.fromSide || null,
+                to: targetName, toSide,
+                type, label: ''
+              });
+              DC.updateCodeFromState();
+              DC.render();
+            }
           }
+          linkDrag.tempPath?.remove();
+          linkDrag = null;
+          canvas.classList.remove('dragging');
         }
-        linkDrag.tempPath?.remove();
-        linkDrag = null;
-        return;
-      }
-      if (drag) {
+      } else if (drag) {
         drag = null;
         canvas.classList.remove('dragging');
         DC.updateCodeFromState();
       }
+
+      if (pan && e.pointerId === pan.pointerId) {
+        pan = null;
+        canvasWrap.classList.remove('panning');
+      }
+
+      if (panCandidate && e.pointerId === panCandidate.pointerId) {
+        if (!panCandidate.moved) {
+          state.selected = null;
+          DC.render();
+        }
+        panCandidate = null;
+      }
+
+      if (tapStart && e.pointerId === tapStart.pointerId && e.pointerType !== 'mouse') {
+        if (!tapStart.moved && tapStart.key) {
+          const now = Date.now();
+          if (lastTap && lastTap.key === tapStart.key && now - lastTap.t < 350 &&
+              Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 48) {
+            const target = elementAt(e);
+            if (target) activateEdit(target);
+            lastTap = null;
+          } else {
+            lastTap = { t: now, key: tapStart.key, x: e.clientX, y: e.clientY };
+          }
+        }
+        tapStart = null;
+      }
     });
 
+    // --- колесо ---
     canvasWrap.addEventListener('wheel', e => {
       e.preventDefault();
       const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-      const newZoom = Math.min(4, Math.max(0.1, zoom * factor));
-      if (newZoom === zoom) return;
-      const rect = canvasWrap.getBoundingClientRect();
-      const wx = e.clientX - rect.left;
-      const wy = e.clientY - rect.top;
-      const px = (canvasWrap.scrollLeft + wx) / zoom;
-      const py = (canvasWrap.scrollTop + wy) / zoom;
-      zoom = newZoom;
-      applyZoom();
-      canvasWrap.scrollLeft = px * zoom - wx;
-      canvasWrap.scrollTop = py * zoom - wy;
+      zoomAt(e.clientX, e.clientY, zoom * factor);
     }, { passive: false });
 
-    canvasWrap.addEventListener('mousedown', e => {
+    // --- пан средней кнопкой ---
+    canvasWrap.addEventListener('pointerdown', e => {
       if (e.button !== 1) return;
       e.preventDefault();
-      pan = { x: e.clientX, y: e.clientY, left: canvasWrap.scrollLeft, top: canvasWrap.scrollTop };
+      pan = { pointerId: e.pointerId, x: e.clientX, y: e.clientY,
+              left: canvasWrap.scrollLeft, top: canvasWrap.scrollTop };
       canvasWrap.classList.add('panning');
     });
 
-    window.addEventListener('mousemove', e => {
-      if (!pan) return;
-      canvasWrap.scrollLeft = pan.left - (e.clientX - pan.x);
-      canvasWrap.scrollTop = pan.top - (e.clientY - pan.y);
-    });
-
-    window.addEventListener('mouseup', e => {
-      if (e.button !== 1) return;
-      pan = null;
-      canvasWrap.classList.remove('panning');
-    });
-
-    canvas.addEventListener('dblclick', e => {
-      const edgeEl = e.target.closest('.edge');
-      if (edgeEl) {
-        const idx = parseInt(edgeEl.dataset.idx);
-        const ed = state.edges[idx];
-        if (!ed) return;
-        const newLabel = prompt('Подпись связи (пусто — удалить):', ed.label || '');
-        if (newLabel !== null) {
-          ed.label = newLabel.trim();
-          DC.updateCodeFromState();
-          DC.render();
-        }
-        return;
-      }
-      const nodeEl = e.target.closest('[data-kind="class"], [data-kind="node"]');
-      if (!nodeEl) return;
-      const kind = nodeEl.dataset.kind;
-      const name = nodeEl.dataset.name;
-      const newName = prompt('Переименовать:', name);
-      if (!newName || newName === name) return;
-      const store = kind === 'class' ? state.classes : state.nodes;
-      if (store[newName]) return alert('Имя занято');
-      const obj = store[name];
-      obj.name = newName;
-      store[newName] = obj;
-      delete store[name];
-      state.edges.forEach(ed => {
-        if (ed.from === name) ed.from = newName;
-        if (ed.to === name) ed.to = newName;
-      });
-      state.selected = { kind, id: newName };
-      DC.updateCodeFromState();
-      DC.render();
-    });
+    // --- редактирование по двойному клику / двойному тапу ---
+    canvas.addEventListener('dblclick', e => activateEdit(e.target));
 
     document.addEventListener('keydown', e => {
       if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
@@ -361,11 +524,29 @@ window.DC = window.DC || {};
       DC.render();
     });
 
+    // --- палитра: drag&drop (мышь) и тап (тач) ---
     document.querySelectorAll('.palette-item').forEach(item => {
       item.addEventListener('dragstart', e => {
         e.dataTransfer.setData('text/plain', item.dataset.type);
         e.dataTransfer.effectAllowed = 'copy';
       });
+
+      let palTap = null;
+      item.addEventListener('pointerdown', e => {
+        if (e.pointerType === 'mouse') return;
+        const scroller = item.closest('#palette');
+        palTap = { y: e.clientY, t: Date.now(), top: scroller ? scroller.scrollTop : 0 };
+      });
+      item.addEventListener('pointerup', e => {
+        if (e.pointerType === 'mouse' || !palTap) { palTap = null; return; }
+        const scroller = item.closest('#palette');
+        const scrolled = scroller ? Math.abs(scroller.scrollTop - palTap.top) : 999;
+        if (Math.abs(e.clientY - palTap.y) < 8 && scrolled < 6 && Date.now() - palTap.t < 700) {
+          createNode(item.dataset.type, centerPt());
+        }
+        palTap = null;
+      });
+      item.addEventListener('pointercancel', () => { palTap = null; });
     });
 
     canvasWrap.addEventListener('dragover', e => {
@@ -383,32 +564,10 @@ window.DC = window.DC || {};
       canvasWrap.classList.remove('drop-target');
       const type = e.dataTransfer.getData('text/plain');
       if (!type) return;
-
-      const pt = svgPoint(e);
-      const name = generateName(type);
-      const id = ++state.lastId;
-
-      if (type === 'class') {
-        state.classes[name] = {
-          kind: 'class', id, name, stereotype: '', attributes: ['+id: int'], methods: ['+action(): void'],
-          x: pt.x, y: pt.y
-        };
-      } else {
-        const defaultText = {
-          start: '', end: '', process: 'action()', decision: 'условие?',
-          io: 'read()', data: 'payload', predef: 'call()', doc: 'report',
-          prep: 'setup', manual: 'step', note: 'text', connector: ''
-        }[type] || '';
-        state.nodes[name] = {
-          kind: 'node', id, type, name, text: defaultText,
-          x: pt.x, y: pt.y
-        };
-      }
-
-      state.selected = { kind: type === 'class' ? 'class' : 'node', id: name };
-      DC.updateCodeFromState();
-      DC.render();
+      createNode(type, svgPoint(e));
     });
+
+    DC.zoomBy = zoomBy;
   }
 
   DC.svgPoint = svgPoint;
@@ -425,13 +584,14 @@ window.DC = window.DC || {};
 
   let resizing = false;
 
-  handle.addEventListener('mousedown', e => {
+  handle.addEventListener('pointerdown', e => {
     e.preventDefault();
     resizing = true;
     handle.classList.add('resizing');
+    handle.setPointerCapture(e.pointerId);
   });
 
-  document.addEventListener('mousemove', e => {
+  handle.addEventListener('pointermove', e => {
     if (!resizing) return;
     const max = Math.max(CODE_MIN, window.innerWidth * 0.55);
     const w = Math.min(max, Math.max(CODE_MIN, e.clientX - PALETTE_W));
@@ -442,11 +602,13 @@ window.DC = window.DC || {};
     if (btn) { btn.textContent = '«'; btn.title = 'Свернуть'; }
   });
 
-  document.addEventListener('mouseup', () => {
+  function stopResize() {
     if (!resizing) return;
     resizing = false;
     handle.classList.remove('resizing');
-  });
+  }
+  handle.addEventListener('pointerup', stopResize);
+  handle.addEventListener('pointercancel', stopResize);
 
   handle.addEventListener('dblclick', () => {
     document.body.style.gridTemplateColumns = '';

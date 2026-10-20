@@ -89,6 +89,37 @@ window.DC = window.DC || {};
     btn.title = collapsed ? 'Развернуть' : 'Свернуть';
   });
 
+  // --- мобильные накладные панели ---
+  const backdrop = document.getElementById('backdrop');
+  const overlayIds = ['palette-panel', 'code-panel', 'right-column'];
+
+  function closeOverlays() {
+    overlayIds.forEach(id => document.getElementById(id)?.classList.remove('open'));
+    backdrop?.classList.remove('show');
+  }
+
+  document.querySelectorAll('#mobile-bar [data-panel]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const panel = document.getElementById(btn.dataset.panel);
+      const willOpen = !panel.classList.contains('open');
+      closeOverlays();
+      if (!willOpen) return;
+      panel.classList.add('open');
+      backdrop.classList.add('show');
+      if (panel.id === 'code-panel') {
+        panel.classList.remove('collapsed');
+        document.body.classList.remove('code-collapsed');
+      }
+    });
+  });
+  backdrop.addEventListener('click', closeOverlays);
+  document.getElementById('m-zoom-in').addEventListener('click', () => DC.zoomBy(1.3));
+  document.getElementById('m-zoom-out').addEventListener('click', () => DC.zoomBy(1 / 1.3));
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 860) closeOverlays();
+  });
+
   const EXAMPLE = `start #1 Start
 io #2 Ввод: логин и пароль
 process #3 Проверка: validate()

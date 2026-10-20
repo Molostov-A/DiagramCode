@@ -2,6 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>UML + Flowchart Visual Editor</title>
 <link rel="stylesheet" href="css/styles.css">
 </head>
@@ -92,10 +93,10 @@
 </div>
 
 <!-- ========== ХОЛСТ ========== -->
-<div class="panel">
+<div class="panel" id="canvas-panel">
   <div class="panel-header">
     <span>Холст</span>
-    <span style="font-size:10px;color:#6c7086;font-weight:normal;text-transform:none;">перетащи из палитры · тяни от порта для связи</span>
+    <span class="canvas-hint">перетащи из палитры · тяни от порта для связи</span>
   </div>
   <div id="canvas-wrap">
     <svg id="canvas" width="4000" height="4000"></svg>
@@ -120,6 +121,17 @@
     </div>
     <div id="spec"><div class="hint">Пусто</div></div>
   </div>
+</div>
+
+<div id="backdrop"></div>
+
+<!-- ========== МОБИЛЬНАЯ ПАНЕЛЬ ========== -->
+<div id="mobile-bar">
+  <button data-panel="palette-panel">Элементы</button>
+  <button data-panel="code-panel">Код</button>
+  <button data-panel="right-column">Свойства</button>
+  <button id="m-zoom-out" title="Отдалить">−</button>
+  <button id="m-zoom-in" title="Приблизить">+</button>
 </div>
 
 <script src="js/state.js"></script>
