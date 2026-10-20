@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>UML + Flowchart Visual Editor</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ========== ПАЛИТРА ========== -->
+<div class="panel" id="palette-panel">
+  <div class="panel-header">Элементы</div>
+  <div id="palette">
+    <div class="palette-section">
+      <h5>Блок-схема</h5>
+      <div class="palette-item" draggable="true" data-type="start">
+        <svg width="24" height="16"><rect x="1" y="1" width="22" height="14" rx="7" fill="none" stroke="#89dceb" stroke-width="1.5"/></svg>
+        <span class="label">Начало</span>
+      </div>
+      <div class="palette-item" draggable="true" data-type="end">
+        <svg width="24" height="16"><rect x="1" y="1" width="22" height="14" rx="7" fill="none" stroke="#89dceb" stroke-width="1.5"/></svg>
+        <span class="label">Конец</span>
+      </div>
+      <div class="palette-item" draggable="true" data-type="process">
+        <svg width="24" height="16"><rect x="1" y="2" width="22" height="12" fill="none" stroke="#a6e3a1" stroke-width="1.5"/></svg>
+        <span class="label">Процесс</span>
+      </div>
+      <div class="palette-item" draggable="true" data-type="decision">
+        <svg width="24" height="16"><polygon points="12,1 23,8 12,15 1,8" fill="none" stroke="#fab387" stroke-width="1.5"/></svg>
+        <span class="label">Решение</span>
+      </div>
+      <div class="palette-item" draggable="true" data-type="io">
+        <svg width="24" height="16"><polygon points="5,2 23,2 19,14 1,14" fill="none" stroke="#cba6f7" stroke-width="1.5"/></svg>
+        <span class="label">Ввод/Вывод</span>
+      </div>
+      <div class="palette-item" draggable="true" data-type="data">
+        <svg width="24" height="16"><polygon points="5,2 23,2 19,14 1,14" fill="none" stroke="#cba6f7" stroke-width="1.5"/></svg>
+        <span class="label">Данные</span>
+      </div>
+      <div class="palette-item" draggable="true" data-type="predef">
+        <svg width="24" height="16"><rect x="1" y="2" width="22" height="12" fill="none" stroke="#a6e3a1" stroke-width="1.5"/><line x1="5" y1="2" x2="5" y2="14" stroke="#a6e3a1" stroke-width="1"/><line x1="19" y1="2" x2="19" y2="14" stroke="#a6e3a1" stroke-width="1"/></svg>
+        <span class="label">Предопр. процесс</span>
+      </div>
+      <div class="palette-item" draggable="true" data-type="doc">
+        <svg width="24" height="16"><path d="M1 2 H23 V12 Q17 16 12 12 Q7 8 1 12 Z" fill="none" stroke="#a6e3a1" stroke-width="1.5"/></svg>
+        <span class="label">Документ</span>
+      </div>
+      <div class="palette-item" draggable="true" data-type="prep">
+        <svg width="24" height="16"><polygon points="5,2 19,2 23,8 19,14 5,14 1,8" fill="none" stroke="#a6e3a1" stroke-width="1.5"/></svg>
+        <span class="label">Подготовка</span>
+      </div>
+      <div class="palette-item" draggable="true" data-type="manual">
+        <svg width="24" height="16"><polygon points="5,2 23,2 19,14 1,14" fill="none" stroke="#a6e3a1" stroke-width="1.5"/></svg>
+        <span class="label">Ручная операция</span>
+      </div>
+      <div class="palette-item" draggable="true" data-type="note">
+        <svg width="24" height="16"><path d="M6 2 H1 V14 H6" fill="none" stroke="#a6e3a1" stroke-width="1.5"/></svg>
+        <span class="label">Комментарий</span>
+      </div>
+      <div class="palette-item" draggable="true" data-type="connector">
+        <svg width="24" height="16"><circle cx="12" cy="8" r="7" fill="none" stroke="#f38ba8" stroke-width="1.5"/></svg>
+        <span class="label">Соединитель</span>
+      </div>
+    </div>
+    <div class="palette-section">
+      <h5>UML</h5>
+      <div class="palette-item" draggable="true" data-type="class">
+        <svg width="24" height="16"><rect x="1" y="1" width="22" height="14" fill="none" stroke="#89b4fa" stroke-width="1.5"/><line x1="1" y1="5" x2="23" y2="5" stroke="#89b4fa" stroke-width="1"/></svg>
+        <span class="label">UML класс</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== РЕДАКТОР КОДА ========== -->
+<div class="panel">
+  <div class="panel-header">
+    <span>Код DSL</span>
+    <span class="status" id="status">✓ OK</span>
+  </div>
+  <div class="toolbar">
+    <button id="btn-format">Формат</button>
+    <button id="btn-layout">Раскладка</button>
+    <button id="btn-clear">Очистить</button>
+  </div>
+  <textarea id="code" spellcheck="false"></textarea>
+</div>
+
+<!-- ========== ХОЛСТ ========== -->
+<div class="panel">
+  <div class="panel-header">
+    <span>Холст</span>
+    <span style="font-size:10px;color:#6c7086;font-weight:normal;text-transform:none;">перетащи из палитры · тяни от порта для связи</span>
+  </div>
+  <div id="canvas-wrap">
+    <svg id="canvas" width="4000" height="4000"></svg>
+  </div>
+</div>
+
+<!-- ========== ПАНЕЛЬ СВОЙСТВ ========== -->
+<div class="panel">
+  <div class="panel-header">Свойства</div>
+  <div id="properties">
+    <div class="hint">Выберите узел или связь на холсте</div>
+  </div>
+</div>
+
+<script src="js/state.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/parser.js"></script>
+<script src="js/codegen.js"></script>
+<script src="js/render.js"></script>
+<script src="js/properties.js"></script>
+<script src="js/interactions.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
