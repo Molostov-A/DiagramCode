@@ -111,6 +111,23 @@ window.DC = window.DC || {};
     DC.render();
   });
 
+  const themeBtn = document.getElementById('btn-theme');
+  function applyUITheme(light) {
+    document.body.classList.toggle('light', light);
+    themeBtn.textContent = light ? '☀' : '☾';
+    themeBtn.title = light ? 'Тёмная тема' : 'Светлая тема';
+  }
+  applyUITheme(localStorage.getItem('dc-ui-theme') === 'light');
+  themeBtn.addEventListener('click', () => {
+    const light = !document.body.classList.contains('light');
+    applyUITheme(light);
+    localStorage.setItem('dc-ui-theme', light ? 'light' : 'dark');
+  });
+
+  document.getElementById('btn-screenshot').addEventListener('click', () => {
+    DC.exportImage('png');
+  });
+
   document.getElementById('toggle-code').addEventListener('click', () => {
     const panel = document.getElementById('code-panel');
     const collapsed = panel.classList.toggle('collapsed');

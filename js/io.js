@@ -132,4 +132,125 @@ window.DC = window.DC || {};
 
   DC.exportJSON = exportJSON;
   DC.importJSON = importJSON;
+
+  function contentBBox() {
+    const state = DC.state;
+    const all = { ...state.classes, ...state.nodes };
+    const units = Object.values(all);
+    if (!units.length) return null;
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    units.forEach(u => {
+      const b = u._box || (u.kind === 'class' ? DC.classBox(u) : DC.flowNodeBox(u));
+      x1 = Math.min(x1, u.x); y1 = Math.min(y1, u.y);
+      x2 = Math.max(x2, u.x + b.width); y2 = Math.max(y2, u.y + b.height + 10);
+    });
+    return { x1, y1, x2, y2 };
+  }
+
+  const INLINE_PROPS = [
+    'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linejoin', 'stroke-linecap',
+    'font-size', 'font-family', 'font-weight', 'font-style', 'opacity'
+  ];
+  const SKIP_SEL = '.port, .edge-hit, .edge-wp, .edge-ep, #temp-edge, .node-id';
+
+  function inlineStyles(srcNode, dstNode, canvasBg) {
+    if (srcNode.nodeType === 1) {
+      const cs = getComputedStyle(srcNode);
+      const parts = [];
+      INLINE_PROPS.forEach(p => {
+        let v = cs.getPropertyValue(p);
+        if (v && v.includes('var(')) v = canvasBg;
+        if (v === 'rgba(0, 0, 0, 0)' || v === 'transparent') {
+          if (p === 'fill' || p === 'stroke') v = 'none';
+        }
+        if (v && v !== 'normal') parts.push(`${p}:${v}`);
+      });
+      if (srcNode.tagName === 'svg' || srcNode.tagName === 'g') {
+        const keep = parts.filter(p => !/^(fill|stroke|stroke-width):/.test(p));
+        if (keep.length) dstNode.setAttribute('style', keep.join(';'));
+        else dstNode.removeAttribute('style');
+      } else {
+        dstNode.setAttribute('style', parts.join(';'));
+      }
+    }
+    const srcKids = [...srcNode.childNodes];
+    const dstKids = [...dstNode.childNodes];
+    for (let i = 0; i < srcKids.length; i++) {
+      const s = srcKids[i], d = dstKids[i];
+      if (!d) continue;
+      if (s.nodeType === 1 && s.matches && s.matches(SKIP_SEL)) {
+        d.parentNode.removeChild(d);
+        continue;
+      }
+      inlineStyles(s, d, canvasBg);
+    }
+  }
+
+  function buildStandaloneSVG() {
+    const bbox = contentBBox();
+    if (!bbox) return null;
+    const PAD = 40;
+    const vb = [bbox.x1 - PAD, bbox.y1 - PAD,
+      (bbox.x2 - bbox.x1) + PAD * 2, (bbox.y2 - bbox.y1) + PAD * 2];
+    const w = Math.round(vb[2]), h = Math.round(vb[3]);
+
+    const canvasBg = getComputedStyle(document.body).getPropertyValue('--canvas-bg').trim()
+      || (document.body.classList.contains('light') ? '#dce0e8' : '#11111b');
+
+    const clone = DC.canvas.cloneNode(true);
+    inlineStyles(DC.canvas, clone, canvasBg);
+
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+    clone.setAttribute('width', w);
+    clone.setAttribute('height', h);
+    clone.setAttribute('viewBox', vb.join(' '));
+
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bg.setAttribute('x', vb[0]); bg.setAttribute('y', vb[1]);
+    bg.setAttribute('width', vb[2]); bg.setAttribute('height', vb[3]);
+    bg.setAttribute('fill', canvasBg);
+    clone.insertBefore(bg, clone.firstChild);
+
+    return { svg: new XMLSerializer().serializeToString(clone), w, h };
+  }
+
+  function download(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  function exportImage(kind) {
+    const built = buildStandaloneSVG();
+    if (!built) { alert('Схема пуста'); return; }
+    const base = suggestedName();
+    if (kind === 'svg') {
+      download(new Blob([built.svg], { type: 'image/svg+xml' }), base + '.svg');
+      return;
+    }
+    const scale = 3;
+    const img = new Image();
+    const blobUrl = URL.createObjectURL(new Blob([built.svg], { type: 'image/svg+xml' }));
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = built.w * scale;
+      canvas.height = built.h * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(blobUrl);
+      canvas.toBlob(b => {
+        if (!b) { alert('Не удалось создать PNG'); return; }
+        download(b, base + '@3x.png');
+      }, 'image/png');
+    };
+    img.onerror = () => { URL.revokeObjectURL(blobUrl); alert('Не удалось отрисовать PNG'); };
+    img.src = blobUrl;
+  }
+
+  DC.exportImage = exportImage;
 })();

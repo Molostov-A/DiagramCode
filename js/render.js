@@ -254,11 +254,18 @@ window.DC = window.DC || {};
   }
 
   function addPorts(g, node, w, h) {
-    const ports = [
-      { side: 'right',  cx: w,     cy: h/2,  x: w,   y: h/2 },
-      { side: 'left',   cx: 0,     cy: h/2,  x: 0,   y: h/2 },
-      { side: 'top',    cx: w/2,   cy: 0,    x: w/2, y: 0 },
-      { side: 'bottom', cx: w/2,   cy: h,    x: w/2, y: h }
+    const isCircle = node.type === 'connector';
+    const r = Math.min(w, h) / 2;
+    const ports = isCircle ? [
+      { side: 'right',  cx: w/2 + r, cy: h/2 },
+      { side: 'left',   cx: w/2 - r, cy: h/2 },
+      { side: 'top',    cx: w/2,     cy: h/2 - r },
+      { side: 'bottom', cx: w/2,     cy: h/2 + r }
+    ] : [
+      { side: 'right',  cx: w,   cy: h/2 },
+      { side: 'left',   cx: 0,   cy: h/2 },
+      { side: 'top',    cx: w/2, cy: 0 },
+      { side: 'bottom', cx: w/2, cy: h }
     ];
     ports.forEach(p => {
       el('circle', {
@@ -270,6 +277,17 @@ window.DC = window.DC || {};
 
   function sidePoint(node, box, side) {
     const { width: w, height: h } = box;
+    if (node.type === 'connector') {
+      const r = Math.min(w, h) / 2;
+      const cx = node.x + w/2, cy = node.y + h/2;
+      switch (side) {
+        case 'top':    return { x: cx, y: cy - r };
+        case 'bottom': return { x: cx, y: cy + r };
+        case 'left':   return { x: cx - r, y: cy };
+        case 'right':  return { x: cx + r, y: cy };
+        default:       return null;
+      }
+    }
     switch (side) {
       case 'top':    return { x: node.x + w/2, y: node.y };
       case 'bottom': return { x: node.x + w/2, y: node.y + h };
@@ -489,7 +507,7 @@ window.DC = window.DC || {};
     const px = -uy*size*0.6, py = ux*size*0.6;
     el('polygon', {
       points: `${p2.x},${p2.y} ${bx+px},${by+py} ${bx-px},${by-py}`,
-      class: 'arrow', style: `fill:${hollow ? '#1e1e2e' : color};stroke:${color};stroke-width:1.4`
+      class: 'arrow', style: `fill:${hollow ? 'var(--canvas-bg)' : color};stroke:${color};stroke-width:1.4`
     }, g);
   }
 
@@ -503,7 +521,7 @@ window.DC = window.DC || {};
     const tx = p2.x - ux*size*2, ty = p2.y - uy*size*2;
     el('polygon', {
       points: `${p2.x},${p2.y} ${bx+px},${by+py} ${tx},${ty} ${bx-px},${by-py}`,
-      class: 'arrow', style: `fill:${filled ? color : '#1e1e2e'};stroke:${color};stroke-width:1.4`
+      class: 'arrow', style: `fill:${filled ? color : 'var(--canvas-bg)'};stroke:${color};stroke-width:1.4`
     }, g);
   }
 
