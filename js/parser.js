@@ -5,6 +5,7 @@ DC.FLOW_KEYWORDS = ['start','end','process','decision','io','predef','doc','data
 
 DC.parseDSL = function (text) {
   const classes = {}, nodes = {}, edges = [], errors = [];
+  const layoutMap = {};
   const lines = text.split('\n');
   let i = 0;
 
@@ -31,11 +32,18 @@ DC.parseDSL = function (text) {
       continue;
     }
 
-    const relMatch = line.match(/^rel\s+([\p{L}_][\p{L}\p{N}_]*)\s*(-->|-\|>|->|\*--|o--|--)\s*([\p{L}_][\p{L}\p{N}_]*)\s*(?::\s*(.+))?$/u);
+    const relMatch = line.match(/^rel\s+([\p{L}_][\p{L}\p{N}_]*)(?:\.(top|right|bottom|left))?\s*(-->|-\|>|->|\*--|o--|--)\s*([\p{L}_][\p{L}\p{N}_]*)(?:\.(top|right|bottom|left))?(?:\s*\{\s*(auto|polyline|smooth|rect)\s*\})?\s*(?::\s*(.+))?$/u);
     if (relMatch) {
-      const [, from, type, to, label] = relMatch;
+      const [, from, fromSide, type, to, toSide, route, label] = relMatch;
       const typeMap = { '-->':'dependency', '-|>':'inherit', '->':'assoc', '*--':'composition', 'o--':'aggregation', '--':'link' };
-      edges.push({ from, to, type: typeMap[type], label: label?.trim() || '' });
+      edges.push({ from, fromSide: fromSide || null, to, toSide: toSide || null, type: typeMap[type], route: route === 'auto' ? null : (route || null), label: label?.trim() || '' });
+      continue;
+    }
+
+    const layoutMatch = line.match(/^layout\s+([\p{L}_][\p{L}\p{N}_]*)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)$/u);
+    if (layoutMatch) {
+      const [, name, x, y] = layoutMatch;
+      layoutMap[name] = { x: parseFloat(x), y: parseFloat(y) };
       continue;
     }
 
@@ -52,10 +60,10 @@ DC.parseDSL = function (text) {
     }
     if (matched) continue;
 
-    const flowMatch = line.match(/^flow\s+([\p{L}_][\p{L}\p{N}_]*)\s*(-->|->)\s*([\p{L}_][\p{L}\p{N}_]*)\s*(?::\s*(.+))?$/u);
+    const flowMatch = line.match(/^flow\s+([\p{L}_][\p{L}\p{N}_]*)(?:\.(top|right|bottom|left))?\s*(-->|->)\s*([\p{L}_][\p{L}\p{N}_]*)(?:\.(top|right|bottom|left))?(?:\s*\{\s*(auto|polyline|smooth|rect)\s*\})?\s*(?::\s*(.+))?$/u);
     if (flowMatch) {
-      const [, from, op, to, label] = flowMatch;
-      edges.push({ from, to, type: op === '-->' ? 'flowDashed' : 'flow', label: label?.trim() || '' });
+      const [, from, fromSide, op, to, toSide, route, label] = flowMatch;
+      edges.push({ from, fromSide: fromSide || null, to, toSide: toSide || null, type: op === '-->' ? 'flowDashed' : 'flow', route: route === 'auto' ? null : (route || null), label: label?.trim() || '' });
       continue;
     }
 
@@ -68,6 +76,15 @@ DC.parseDSL = function (text) {
     if (!allNames.has(e.to))   errors.push(`Нет узла "${e.to}"`);
   });
 
-  DC.autoLayout(classes, nodes, edges);
+  const fixed = new Set();
+  Object.entries(layoutMap).forEach(([name, pos]) => {
+    const u = classes[name] || nodes[name];
+    if (!u) return;
+    u.x = pos.x;
+    u.y = pos.y;
+    fixed.add(name);
+  });
+
+  DC.autoLayout(classes, nodes, edges, fixed);
   return { classes, nodes, edges, errors };
 };

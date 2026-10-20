@@ -5,7 +5,7 @@
 <title>UML + Flowchart Visual Editor</title>
 <link rel="stylesheet" href="css/styles.css">
 </head>
-<body>
+<body class="code-collapsed">
 
 <!-- ========== ПАЛИТРА ========== -->
 <div class="panel" id="palette-panel">
@@ -73,9 +73,10 @@
 </div>
 
 <!-- ========== РЕДАКТОР КОДА ========== -->
-<div class="panel">
+<div class="panel collapsed" id="code-panel">
   <div class="panel-header">
-    <span>Код DSL</span>
+    <button id="toggle-code" class="panel-toggle" title="Развернуть">»</button>
+    <span class="header-label">Код DSL</span>
     <span class="status" id="status">✓ OK</span>
   </div>
   <div class="toolbar">

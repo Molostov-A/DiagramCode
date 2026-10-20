@@ -1,7 +1,7 @@
 'use strict';
 window.DC = window.DC || {};
 
-DC.autoLayout = function (classes, nodes, edges) {
+DC.autoLayout = function (classes, nodes, edges, fixed) {
   const allNodes = { ...classes, ...nodes };
   const names = Object.keys(allNodes);
   if (!names.length) return;
@@ -20,9 +20,12 @@ DC.autoLayout = function (classes, nodes, edges) {
   names.forEach(n => (byLevel[level[n]] ||= []).push(n));
   const COL_W = 260, ROW_H = 200;
   Object.entries(byLevel).forEach(([lvl, arr]) => {
-    arr.forEach((n, idx) => {
+    let idx = 0;
+    arr.forEach(n => {
+      if (fixed && fixed.has(n)) return;
       allNodes[n].x = 80 + parseInt(lvl) * COL_W;
       allNodes[n].y = 60 + idx * ROW_H;
+      idx++;
     });
   });
 };

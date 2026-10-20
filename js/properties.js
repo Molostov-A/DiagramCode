@@ -70,14 +70,25 @@ DC.renderProperties = function () {
     const ed = state.edges[id];
     if (!ed) return container.innerHTML = '<div class="hint">не найдено</div>';
     const edgeTypes = ['flow','flowDashed','assoc','dependency','inherit','composition','aggregation','link'];
+    const sideOptions = (selected) => ['', 'top', 'right', 'bottom', 'left']
+      .map(s => `<option value="${s}" ${s === (selected || '') ? 'selected' : ''}>${s || 'авто'}</option>`)
+      .join('');
     container.innerHTML = `
       <div class="prop-group">
         <label>Из</label>
         <input value="${DC.escapeHtml(ed.from)}" disabled />
       </div>
       <div class="prop-group">
+        <label>Сторона источника</label>
+        <select id="prop-from-side">${sideOptions(ed.fromSide)}</select>
+      </div>
+      <div class="prop-group">
         <label>В</label>
         <input value="${DC.escapeHtml(ed.to)}" disabled />
+      </div>
+      <div class="prop-group">
+        <label>Сторона цели</label>
+        <select id="prop-to-side">${sideOptions(ed.toSide)}</select>
       </div>
       <div class="prop-group">
         <label>Тип связи</label>
@@ -86,9 +97,19 @@ DC.renderProperties = function () {
         </select>
       </div>
       <div class="prop-group">
+        <label>Маршрут линии</label>
+        <select id="prop-edge-route">
+          <option value="" ${!ed.route?'selected':''}>авто</option>
+          <option value="polyline" ${ed.route==='polyline'?'selected':''}>ломаная</option>
+          <option value="smooth" ${ed.route==='smooth'?'selected':''}>сглаженная</option>
+          <option value="rect" ${ed.route==='rect'?'selected':''}>прямоугольная</option>
+        </select>
+      </div>
+      <div class="prop-group">
         <label>Подпись</label>
         <input id="prop-edge-label" value="${DC.escapeHtml(ed.label)}" placeholder="например: да / нет" />
       </div>
+      <button class="prop-delete" id="prop-edge-reset">Сбросить настройки</button>
       <button class="prop-delete" id="prop-delete">Удалить связь</button>
     `;
     bindEdgeProps(ed);
@@ -176,8 +197,25 @@ function bindNodeProps(node) {
 
 function bindEdgeProps(ed) {
   const state = DC.state;
+  document.getElementById('prop-from-side').onchange = e => {
+    ed.fromSide = e.target.value || null;
+    DC.updateCodeFromState();
+    DC.render();
+  };
+  document.getElementById('prop-to-side').onchange = e => {
+    ed.toSide = e.target.value || null;
+    DC.updateCodeFromState();
+    DC.render();
+  };
   document.getElementById('prop-edge-type').onchange = e => {
     ed.type = e.target.value;
+    DC.updateCodeFromState();
+    DC.render();
+  };
+  document.getElementById('prop-edge-route').onchange = e => {
+    ed.route = e.target.value || null;
+    ed.pts = null;
+    ed.ptsCustom = false;
     DC.updateCodeFromState();
     DC.render();
   };
@@ -185,6 +223,16 @@ function bindEdgeProps(ed) {
     ed.label = e.target.value;
     DC.updateCodeFromState();
     DC.render();
+  };
+  document.getElementById('prop-edge-reset').onclick = () => {
+    ed.fromSide = null;
+    ed.toSide = null;
+    ed.route = null;
+    ed.pts = null;
+    ed.ptsCustom = false;
+    DC.updateCodeFromState();
+    DC.render();
+    DC.renderProperties();
   };
   document.getElementById('prop-delete').onclick = () => {
     const idx = state.edges.indexOf(ed);

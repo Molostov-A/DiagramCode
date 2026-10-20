@@ -35,8 +35,22 @@ DC.stateToCode = function () {
       const op = rev[ed.type] || '->';
       const isFlow = ed.type === 'flow' || ed.type === 'flowDashed';
       const kw = isFlow ? 'flow' : 'rel';
+      const from = ed.fromSide ? `${ed.from}.${ed.fromSide}` : ed.from;
+      const to = ed.toSide ? `${ed.to}.${ed.toSide}` : ed.to;
+      const route = ed.route ? ` {${ed.route}}` : '';
       const label = ed.label ? ` : ${ed.label}` : '';
-      lines.push(`${kw} ${ed.from} ${op} ${ed.to}${label}`);
+      lines.push(`${kw} ${from} ${op} ${to}${route}${label}`);
+    });
+    lines.push('');
+  }
+
+  const allNodes = { ...state.classes, ...state.nodes };
+  const names = Object.keys(allNodes);
+  if (names.length) {
+    lines.push('# Расположение');
+    names.forEach(n => {
+      const u = allNodes[n];
+      lines.push(`layout ${n} ${Math.round(u.x)} ${Math.round(u.y)}`);
     });
   }
 

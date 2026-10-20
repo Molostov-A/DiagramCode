@@ -5,10 +5,17 @@ window.DC = window.DC || {};
   const state = DC.state;
   let drag = null;
   let linkDrag = null;
+  let wpDrag = null;
+  let epDrag = null;
+  let zoom = 1;
+
+  function applyZoom() {
+    DC.canvas.style.transform = `scale(${zoom})`;
+  }
 
   function svgPoint(e) {
     const rect = DC.canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    return { x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom };
   }
 
   function generateName(type) {
@@ -24,17 +31,78 @@ window.DC = window.DC || {};
     return name;
   }
 
+  function cyclePortSide(nodeName, portSide) {
+    const state = DC.state;
+    let changed = false;
+    state.edges.forEach(ed => {
+      if (ed.from === nodeName) {
+        if (ed.fromSide === portSide) ed.fromSide = null;
+        else ed.fromSide = portSide;
+        changed = true;
+      } else if (ed.to === nodeName) {
+        if (ed.toSide === portSide) ed.toSide = null;
+        else ed.toSide = portSide;
+        changed = true;
+      }
+    });
+    if (changed) {
+      DC.updateCodeFromState();
+      DC.render();
+    }
+    return changed;
+  }
+
   function setupInteractions() {
     const canvas = DC.canvas;
     const canvasWrap = DC.canvasWrap;
+    let pan = null;
 
     canvas.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+
+      const epEl = e.target.closest('.edge-ep');
+      if (epEl) {
+        e.preventDefault();
+        e.stopPropagation();
+        const edgeIdx = parseInt(epEl.dataset.edgeIdx);
+        const ed = state.edges[edgeIdx];
+        if (!ed) return;
+        state.selected = { kind: 'edge', id: edgeIdx };
+        epDrag = { edgeIdx, end: epEl.dataset.end, startX: e.clientX, startY: e.clientY, moved: false };
+        const tempPath = DC.el('path', { id: 'temp-edge', d: '' }, canvas);
+        epDrag.tempPath = tempPath;
+        canvas.classList.add('dragging');
+        return;
+      }
+
+      const wpEl = e.target.closest('.edge-wp');
+      if (wpEl) {
+        e.preventDefault();
+        e.stopPropagation();
+        const edgeIdx = parseInt(wpEl.dataset.edgeIdx);
+        const wpIdx = parseInt(wpEl.dataset.wpIdx);
+        const ed = state.edges[edgeIdx];
+        if (!ed) return;
+        if (!ed.ptsCustom) {
+          const ptsEl = wpEl.closest('.edge').querySelectorAll('.edge-wp');
+          ed.pts = Array.from(ptsEl).map(c => ({ x: parseFloat(c.getAttribute('cx')), y: parseFloat(c.getAttribute('cy')) }));
+          ed.ptsCustom = true;
+        }
+        state.selected = { kind: 'edge', id: edgeIdx };
+        wpDrag = { edgeIdx, wpIdx };
+        canvas.classList.add('dragging');
+        return;
+      }
+
       const portEl = e.target.closest('.port');
       if (portEl) {
         e.preventDefault();
         e.stopPropagation();
         const fromName = portEl.dataset.portNode;
-        linkDrag = { from: fromName };
+        linkDrag = {
+          from: fromName, fromSide: portEl.dataset.portSide || null,
+          startX: e.clientX, startY: e.clientY, moved: false
+        };
         const tempPath = DC.el('path', { id: 'temp-edge', d: '' }, canvas);
         linkDrag.tempPath = tempPath;
         return;
@@ -64,12 +132,51 @@ window.DC = window.DC || {};
     canvas.addEventListener('mousemove', e => {
       const pt = svgPoint(e);
 
+      if (epDrag) {
+        if (!epDrag.moved &&
+            Math.hypot(e.clientX - epDrag.startX, e.clientY - epDrag.startY) > 4) {
+          epDrag.moved = true;
+        }
+        if (!epDrag.moved) return;
+        const ed = state.edges[epDrag.edgeIdx];
+        if (ed) {
+          const a = DC.getNode(ed.from), b = DC.getNode(ed.to);
+          if (a && b) {
+            const aBox = a._box || (a.kind === 'class' ? DC.classBox(a) : DC.flowNodeBox(a));
+            const bBox = b._box || (b.kind === 'class' ? DC.classBox(b) : DC.flowNodeBox(b));
+            const ac = { x: a.x + aBox.width/2, y: a.y + aBox.height/2 };
+            const bc = { x: b.x + bBox.width/2, y: b.y + bBox.height/2 };
+            const p1 = ed.fromSide ? DC.sidePoint(a, aBox, ed.fromSide) : DC.intersectBoundary(ac, bc, a, aBox);
+            const p2 = ed.toSide ? DC.sidePoint(b, bBox, ed.toSide) : DC.intersectBoundary(bc, ac, b, bBox);
+            const from = epDrag.end === 'from' ? pt : p1;
+            const to = epDrag.end === 'from' ? p2 : pt;
+            epDrag.tempPath.setAttribute('d', `M ${from.x} ${from.y} L ${to.x} ${to.y}`);
+          }
+        }
+        return;
+      }
+
+      if (wpDrag) {
+        const ed = state.edges[wpDrag.edgeIdx];
+        if (ed && ed.pts && ed.pts[wpDrag.wpIdx]) {
+          ed.pts[wpDrag.wpIdx] = { x: pt.x, y: pt.y };
+          DC.render();
+        }
+        return;
+      }
+
       if (linkDrag) {
+        if (!linkDrag.moved &&
+            Math.hypot(e.clientX - linkDrag.startX, e.clientY - linkDrag.startY) > 4) {
+          linkDrag.moved = true;
+        }
+        if (!linkDrag.moved) return;
         const fromNode = DC.getNode(linkDrag.from);
         if (fromNode) {
           const box = fromNode._box || (fromNode.kind === 'class' ? DC.classBox(fromNode) : DC.flowNodeBox(fromNode));
-          const fc = { x: fromNode.x + box.width/2, y: fromNode.y + box.height/2 };
-          const p1 = DC.intersectBoundary(fc, pt, fromNode, box);
+          const p1 = linkDrag.fromSide
+            ? DC.sidePoint(fromNode, box, linkDrag.fromSide)
+            : DC.intersectBoundary({ x: fromNode.x + box.width/2, y: fromNode.y + box.height/2 }, pt, fromNode, box);
           linkDrag.tempPath.setAttribute('d', `M ${p1.x} ${p1.y} L ${pt.x} ${pt.y}`);
         }
         return;
@@ -83,7 +190,57 @@ window.DC = window.DC || {};
     });
 
     window.addEventListener('mouseup', e => {
+      if (epDrag) {
+        epDrag.tempPath?.remove();
+        const moved = epDrag.moved;
+        const ed = state.edges[epDrag.edgeIdx];
+        if (ed && moved) {
+          const portEl = e.target.closest?.('.port');
+          const nodeEl = e.target.closest?.('[data-kind="class"], [data-kind="node"]');
+          if (portEl) {
+            const name = portEl.dataset.portNode;
+            const side = portEl.dataset.portSide || null;
+            const other = epDrag.end === 'from' ? ed.to : ed.from;
+            if (name !== other) {
+              if (epDrag.end === 'from') { ed.from = name; ed.fromSide = side; }
+              else { ed.to = name; ed.toSide = side; }
+              DC.updateCodeFromState();
+            }
+          } else if (nodeEl) {
+            const name = nodeEl.dataset.name;
+            const other = epDrag.end === 'from' ? ed.to : ed.from;
+            if (name !== other) {
+              const obj = DC.getNode(name);
+              const box = obj._box || (obj.kind === 'class' ? DC.classBox(obj) : DC.flowNodeBox(obj));
+              const side = DC.nearestSide(obj, box, svgPoint(e));
+              if (epDrag.end === 'from') { ed.from = name; ed.fromSide = side; }
+              else { ed.to = name; ed.toSide = side; }
+              DC.updateCodeFromState();
+            }
+          } else {
+            if (epDrag.end === 'from') ed.fromSide = null;
+            else ed.toSide = null;
+            DC.updateCodeFromState();
+          }
+        }
+        epDrag = null;
+        canvas.classList.remove('dragging');
+        DC.render();
+        return;
+      }
+      if (wpDrag) {
+        wpDrag = null;
+        canvas.classList.remove('dragging');
+        DC.updateCodeFromState();
+        return;
+      }
       if (linkDrag) {
+        if (!linkDrag.moved) {
+          cyclePortSide(linkDrag.from, linkDrag.fromSide);
+          linkDrag.tempPath?.remove();
+          linkDrag = null;
+          return;
+        }
         const targetEl = e.target.closest?.('[data-kind="class"], [data-kind="node"]');
         if (targetEl) {
           const targetName = targetEl.dataset.name;
@@ -92,7 +249,13 @@ window.DC = window.DC || {};
             const toNode = DC.getNode(targetName);
             let type = 'flow';
             if (fromNode.kind === 'class' && toNode.kind === 'class') type = 'assoc';
-            state.edges.push({ from: linkDrag.from, to: targetName, type, label: '' });
+            const toBox = toNode._box || (toNode.kind === 'class' ? DC.classBox(toNode) : DC.flowNodeBox(toNode));
+            const toSide = DC.nearestSide(toNode, toBox, svgPoint(e));
+            state.edges.push({
+              from: linkDrag.from, fromSide: linkDrag.fromSide || null,
+              to: targetName, toSide,
+              type, label: ''
+            });
             DC.updateCodeFromState();
             DC.render();
           }
@@ -106,6 +269,41 @@ window.DC = window.DC || {};
         canvas.classList.remove('dragging');
         DC.updateCodeFromState();
       }
+    });
+
+    canvasWrap.addEventListener('wheel', e => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      const newZoom = Math.min(4, Math.max(0.1, zoom * factor));
+      if (newZoom === zoom) return;
+      const rect = canvasWrap.getBoundingClientRect();
+      const wx = e.clientX - rect.left;
+      const wy = e.clientY - rect.top;
+      const px = (canvasWrap.scrollLeft + wx) / zoom;
+      const py = (canvasWrap.scrollTop + wy) / zoom;
+      zoom = newZoom;
+      applyZoom();
+      canvasWrap.scrollLeft = px * zoom - wx;
+      canvasWrap.scrollTop = py * zoom - wy;
+    }, { passive: false });
+
+    canvasWrap.addEventListener('mousedown', e => {
+      if (e.button !== 1) return;
+      e.preventDefault();
+      pan = { x: e.clientX, y: e.clientY, left: canvasWrap.scrollLeft, top: canvasWrap.scrollTop };
+      canvasWrap.classList.add('panning');
+    });
+
+    window.addEventListener('mousemove', e => {
+      if (!pan) return;
+      canvasWrap.scrollLeft = pan.left - (e.clientX - pan.x);
+      canvasWrap.scrollTop = pan.top - (e.clientY - pan.y);
+    });
+
+    window.addEventListener('mouseup', e => {
+      if (e.button !== 1) return;
+      pan = null;
+      canvasWrap.classList.remove('panning');
     });
 
     canvas.addEventListener('dblclick', e => {

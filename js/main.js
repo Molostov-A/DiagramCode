@@ -6,22 +6,11 @@ window.DC = window.DC || {};
   const codeEl = document.getElementById('code');
   const statusEl = document.getElementById('status');
 
-  function parseAndRender(preservePositions = true) {
+  function parseAndRender() {
     const text = codeEl.value;
-    const oldClasses = state.classes;
-    const oldNodes = state.nodes;
 
     try {
       const { classes, nodes, edges, errors } = DC.parseDSL(text);
-
-      if (preservePositions) {
-        Object.keys(classes).forEach(n => {
-          if (oldClasses[n]) { classes[n].x = oldClasses[n].x; classes[n].y = oldClasses[n].y; }
-        });
-        Object.keys(nodes).forEach(n => {
-          if (oldNodes[n]) { nodes[n].x = oldNodes[n].x; nodes[n].y = oldNodes[n].y; }
-        });
-      }
 
       state.classes = classes;
       state.nodes = nodes;
@@ -47,16 +36,17 @@ window.DC = window.DC || {};
   let syncTimeout = null;
   codeEl.addEventListener('input', () => {
     clearTimeout(syncTimeout);
-    syncTimeout = setTimeout(() => parseAndRender(true), 250);
+    syncTimeout = setTimeout(() => parseAndRender(), 250);
   });
 
   document.getElementById('btn-format').addEventListener('click', () => {
     DC.updateCodeFromState();
-    parseAndRender(false);
+    parseAndRender();
   });
 
   document.getElementById('btn-layout').addEventListener('click', () => {
     DC.autoLayout(state.classes, state.nodes, state.edges);
+    DC.updateCodeFromState();
     DC.render();
   });
 
@@ -65,6 +55,15 @@ window.DC = window.DC || {};
     state.classes = {}; state.nodes = {}; state.edges = []; state.selected = null;
     codeEl.value = '';
     DC.render();
+  });
+
+  document.getElementById('toggle-code').addEventListener('click', () => {
+    const panel = document.getElementById('code-panel');
+    const collapsed = panel.classList.toggle('collapsed');
+    document.body.classList.toggle('code-collapsed', collapsed);
+    const btn = document.getElementById('toggle-code');
+    btn.textContent = collapsed ? '»' : '«';
+    btn.title = collapsed ? 'Развернуть' : 'Свернуть';
   });
 
   const EXAMPLE = `start Start
@@ -77,19 +76,30 @@ process Сохранить: saveSession()
 io Ошибка: showError()
 end Finish
 
-flow Start -> Ввод
-flow Ввод -> Проверка
-flow Проверка -> Корректно
-flow Корректно -> API : да
-flow Корректно -> Ошибка : нет
-flow API -> Успех
-flow Успех -> Сохранить : да
-flow Успех -> Ошибка : нет
-flow Сохранить -> Finish
-flow Ошибка -> Finish
+flow Start.right -> Ввод.left
+flow Ввод.right -> Проверка.left
+flow Проверка.right -> Корректно.left
+flow Корректно.right -> API.left {rect} : да
+flow Корректно.bottom -> Ошибка.top {smooth} : нет
+flow API.right -> Успех.left
+flow Успех.right -> Сохранить.left : да
+flow Успех.bottom -> Ошибка.top : нет
+flow Сохранить.right -> Finish.left
+flow Ошибка.right -> Finish.bottom
+
+# Расположение
+layout Start 80 60
+layout Ввод 340 60
+layout Проверка 600 60
+layout Корректно 860 60
+layout API 1120 60
+layout Успех 1380 60
+layout Сохранить 1640 60
+layout Ошибка 1640 260
+layout Finish 1900 60
 `;
 
   DC.setupInteractions();
   codeEl.value = EXAMPLE;
-  parseAndRender(false);
+  parseAndRender();
 })();

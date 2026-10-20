@@ -173,6 +173,125 @@ window.DC = window.DC || {};
     });
   }
 
+  function sidePoint(node, box, side) {
+    const { width: w, height: h } = box;
+    switch (side) {
+      case 'top':    return { x: node.x + w/2, y: node.y };
+      case 'bottom': return { x: node.x + w/2, y: node.y + h };
+      case 'left':   return { x: node.x, y: node.y + h/2 };
+      case 'right':  return { x: node.x + w, y: node.y + h/2 };
+      default:       return null;
+    }
+  }
+
+  function nearestSide(node, box, pt) {
+    const { width: w, height: h } = box;
+    const dists = {
+      left: Math.abs(pt.x - node.x),
+      right: Math.abs(pt.x - (node.x + w)),
+      top: Math.abs(pt.y - node.y),
+      bottom: Math.abs(pt.y - (node.y + h))
+    };
+    return Object.keys(dists).reduce((a, b) => dists[a] <= dists[b] ? a : b);
+  }
+
+  function sideNormal(side) {
+    switch (side) {
+      case 'top':    return { x: 0, y: -1 };
+      case 'bottom': return { x: 0, y: 1 };
+      case 'left':   return { x: -1, y: 0 };
+      case 'right':  return { x: 1, y: 0 };
+      default:       return null;
+    }
+  }
+
+  function normalFor(edge, node, box, p, isFrom) {
+    const side = isFrom ? edge.fromSide : edge.toSide;
+    const n = sideNormal(side);
+    if (n) return n;
+    const dx = p.x - (node.x + box.width/2);
+    const dy = p.y - (node.y + box.height/2);
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: dx/len, y: dy/len };
+  }
+
+  function defaultEdgePts(edge, a, b, aBox, bBox, p1, p2, n1, n2) {
+    const route = edge.route || 'auto';
+    const OFF = 22;
+    if (route === 'smooth') {
+      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      const k = Math.min(200, Math.max(40, dist * 0.4));
+      return [
+        { x: p1.x + n1.x * k, y: p1.y + n1.y * k },
+        { x: p2.x + n2.x * k, y: p2.y + n2.y * k }
+      ];
+    }
+    const a1 = { x: p1.x + n1.x * OFF, y: p1.y + n1.y * OFF };
+    const a2 = { x: p2.x + n2.x * OFF, y: p2.y + n2.y * OFF };
+    if (route === 'polyline') return [a1, a2];
+    // rect: ортогональный канал
+    const h1 = Math.abs(n1.x) > 0.5;
+    const h2 = Math.abs(n2.x) > 0.5;
+    const mid = [];
+    if (h1 === h2) {
+      if (h1) {
+        const mx = (a1.x + a2.x) / 2;
+        mid.push({ x: mx, y: a1.y }, { x: mx, y: a2.y });
+      } else {
+        const my = (a1.y + a2.y) / 2;
+        mid.push({ x: a1.x, y: my }, { x: a2.x, y: my });
+      }
+    } else {
+      mid.push(h1 ? { x: a2.x, y: a1.y } : { x: a1.x, y: a2.y });
+    }
+    return [a1, ...mid, a2];
+  }
+
+  function buildEdgePath(edge, a, b, aBox, bBox, p1, p2) {
+    const route = edge.route || 'auto';
+    if (route === 'auto') {
+      return { d: `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`, prev: p1, pts: [] };
+    }
+
+    const n1 = normalFor(edge, a, aBox, p1, true);
+    const n2 = normalFor(edge, b, bBox, p2, false);
+    const pts = (edge.ptsCustom && edge.pts) ? edge.pts : defaultEdgePts(edge, a, b, aBox, bBox, p1, p2, n1, n2);
+
+    if (route === 'smooth' && pts.length >= 2) {
+      const [c1, c2] = pts;
+      return {
+        d: `M ${p1.x} ${p1.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p2.x} ${p2.y}`,
+        prev: { x: p2.x + (p2.x - c2.x), y: p2.y + (p2.y - c2.y) },
+        pts
+      };
+    }
+
+    if (route === 'polyline') {
+      const all = [p1, ...pts, p2];
+      return {
+        d: 'M ' + all.map(p => `${p.x} ${p.y}`).join(' L '),
+        prev: pts.length ? pts[pts.length - 1] : p1,
+        pts
+      };
+    }
+
+    // rect: ортогональные сегменты, углы вставляются между вершинами
+    const all = [p1, ...pts, p2];
+    const ortho = [all[0]];
+    for (let i = 0; i < all.length - 1; i++) {
+      const u = all[i], v = all[i + 1];
+      if (Math.abs(u.x - v.x) > 0.5 && Math.abs(u.y - v.y) > 0.5) {
+        ortho.push({ x: v.x, y: u.y });
+      }
+      ortho.push(v);
+    }
+    return {
+      d: 'M ' + ortho.map(p => `${p.x} ${p.y}`).join(' L '),
+      prev: pts.length ? pts[pts.length - 1] : p1,
+      pts
+    };
+  }
+
   function drawEdge(edge, a, b, idx) {
     const aBox = a._box || (a.kind === 'class' ? classBox(a) : flowNodeBox(a));
     const bBox = b._box || (b.kind === 'class' ? classBox(b) : flowNodeBox(b));
@@ -180,26 +299,48 @@ window.DC = window.DC || {};
 
     const ac = { x: a.x + aBox.width/2, y: a.y + aBox.height/2 };
     const bc = { x: b.x + bBox.width/2, y: b.y + bBox.height/2 };
-    const p1 = intersectBoundary(ac, bc, a, aBox);
-    const p2 = intersectBoundary(bc, ac, b, bBox);
+    const p1 = edge.fromSide ? sidePoint(a, aBox, edge.fromSide) : intersectBoundary(ac, bc, a, aBox);
+    const p2 = edge.toSide ? sidePoint(b, bBox, edge.toSide) : intersectBoundary(bc, ac, b, bBox);
 
+    const { d, prev, pts } = buildEdgePath(edge, a, b, aBox, bBox, p1, p2);
     const isFlow = edge.type === 'flow' || edge.type === 'flowDashed';
     const cls = 'edge' + ((edge.type === 'flowDashed' || edge.type === 'dependency') ? ' dashed' : '');
 
     const g = el('g', { class: cls, 'data-idx': idx }, canvas);
-    if (state.selected?.kind === 'edge' && state.selected.id === idx) g.classList.add('selected');
+    const isSelected = state.selected?.kind === 'edge' && state.selected.id === idx;
+    if (isSelected) g.classList.add('selected');
 
-    el('path', { d: `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`, class: 'edge-hit' }, g);
-    el('path', { d: `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}` }, g);
+    el('path', { d, class: 'edge-hit' }, g);
+    el('path', { d }, g);
 
-    if (isFlow) drawArrowOpen(g, p1, p2);
-    else if (edge.type === 'inherit') drawArrowTriangle(g, p1, p2, true);
-    else if (edge.type === 'composition') drawArrowDiamond(g, p1, p2, true);
-    else if (edge.type === 'aggregation') drawArrowDiamond(g, p1, p2, false);
-    else drawArrowOpen(g, p1, p2);
+    if (isFlow) drawArrowOpen(g, prev, p2);
+    else if (edge.type === 'inherit') drawArrowTriangle(g, prev, p2, true);
+    else if (edge.type === 'composition') drawArrowDiamond(g, prev, p2, true);
+    else if (edge.type === 'aggregation') drawArrowDiamond(g, prev, p2, false);
+    else drawArrowOpen(g, prev, p2);
 
     if (edge.label) {
       el('text', { x: (p1.x+p2.x)/2, y: (p1.y+p2.y)/2 - 6, 'text-anchor': 'middle', text: edge.label }, g);
+    }
+
+    if (isSelected && edge.route) {
+      pts.forEach((pt, pi) => {
+        el('circle', {
+          cx: pt.x, cy: pt.y, r: 6,
+          class: 'edge-wp', 'data-edge-idx': idx, 'data-wp-idx': pi
+        }, g);
+      });
+    }
+
+    if (isSelected) {
+      el('circle', {
+        cx: p1.x, cy: p1.y, r: 7,
+        class: 'edge-ep', 'data-edge-idx': idx, 'data-end': 'from'
+      }, g);
+      el('circle', {
+        cx: p2.x, cy: p2.y, r: 7,
+        class: 'edge-ep', 'data-edge-idx': idx, 'data-end': 'to'
+      }, g);
     }
   }
 
@@ -282,11 +423,20 @@ window.DC = window.DC || {};
     state.edges.forEach((edge, idx) => {
       const a = allNodes[edge.from], b = allNodes[edge.to];
       if (!a || !b) return;
+      if (state.selected?.kind === 'edge' && state.selected.id === idx) return;
       drawEdge(edge, a, b, idx);
     });
 
     Object.values(state.classes).forEach(drawClass);
     Object.values(state.nodes).forEach(drawFlowNode);
+
+    if (state.selected?.kind === 'edge') {
+      const edge = state.edges[state.selected.id];
+      if (edge) {
+        const a = allNodes[edge.from], b = allNodes[edge.to];
+        if (a && b) drawEdge(edge, a, b, state.selected.id);
+      }
+    }
 
     DC.renderProperties();
   }
@@ -294,6 +444,6 @@ window.DC = window.DC || {};
   Object.assign(DC, {
     SVG_NS, canvas, canvasWrap, el, measureText, getNode,
     classBox, flowNodeBox, drawClass, drawFlowNode, addPorts,
-    drawEdge, intersectBoundary, render
+    drawEdge, intersectBoundary, sidePoint, nearestSide, render
   });
 })();

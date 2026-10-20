@@ -8,6 +8,9 @@ body {
   color: #cdd6f4;
   overflow: hidden;
 }
+body.code-collapsed {
+  grid-template-columns: 180px 34px 1fr 240px;
+}
 .panel { display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid #45475a; }
 .panel:last-child { border-right: none; }
 .panel-header {
@@ -25,6 +28,25 @@ body {
 .toolbar button:hover { background: #45475a; }
 .status { font-size: 10px; color: #a6e3a1; text-align: right; margin-top: auto; padding: 4px 8px; }
 .status.err { color: #f38ba8; }
+
+.panel-toggle {
+  background: #313244; color: #cdd6f4; border: 1px solid #45475a;
+  border-radius: 4px; cursor: pointer; font-size: 12px; line-height: 1;
+  padding: 2px 7px; flex-shrink: 0;
+}
+.panel-toggle:hover { background: #45475a; }
+
+#code-panel.collapsed .toolbar,
+#code-panel.collapsed #code,
+#code-panel.collapsed .header-label,
+#code-panel.collapsed #status { display: none; }
+#code-panel.collapsed .panel-header {
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
 
 #palette { padding: 8px; overflow-y: auto; }
 .palette-section { margin-bottom: 14px; }
@@ -55,15 +77,19 @@ body {
 
 #canvas-wrap {
   flex: 1; overflow: auto; background: #11111b;
+  position: relative;
+}
+#canvas {
+  display: block; cursor: default;
+  transform-origin: 0 0;
   background-image:
     linear-gradient(#1e1e2e 1px, transparent 1px),
     linear-gradient(90deg, #1e1e2e 1px, transparent 1px);
   background-size: 20px 20px;
-  position: relative;
 }
-#canvas { display: block; cursor: default; }
 #canvas.dragging { cursor: grabbing; }
 #canvas.drop-target { outline: 2px dashed #89b4fa; outline-offset: -4px; }
+#canvas-wrap.panning { cursor: grabbing; }
 
 .uml-class rect { fill: #313244; stroke: #89b4fa; stroke-width: 1.5; }
 .uml-class.selected rect { stroke: #f9e2af; stroke-width: 2.5; }
@@ -83,18 +109,42 @@ body {
 .flow-node.node-body { cursor: move; }
 
 .edge path { fill: none; stroke: #a6adc8; stroke-width: 1.8; pointer-events: stroke; }
-.edge.selected path { stroke: #f9e2af; stroke-width: 2.5; }
-.edge text { fill: #a6adc8; font-family: 'JetBrains Mono', monospace; font-size: 11px; user-select: none; pointer-events: none; }
+.edge:hover path:not(.edge-hit) { stroke: #cdd5f9; stroke-width: 2.4; }
+.edge.selected path:not(.edge-hit) { stroke: #f9e2af; stroke-width: 2.5; }
+.edge text { fill: #a6adc8; font-family: 'JetBrains Mono', monospace; font-size: 11px; user-select: none; pointer-events: all; cursor: pointer; }
+.edge.selected text { fill: #f9e2af; }
 .edge .arrow { fill: #a6adc8; pointer-events: none; }
+.edge:hover .arrow { fill: #cdd5f9; }
+.edge.selected .arrow { fill: #f9e2af; }
 .edge.dashed path { stroke-dasharray: 5 4; }
-.edge-hit { fill: none; stroke: transparent; stroke-width: 15; cursor: pointer; }
+.edge-hit { fill: none; stroke: transparent; stroke-width: 22; cursor: pointer; }
+
+.edge-wp {
+  fill: #89b4fa;
+  stroke: #1e1e2e;
+  stroke-width: 1.5;
+  cursor: grab;
+  pointer-events: all;
+}
+.edge-wp:hover { fill: #f9e2af; r: 7; }
+.edge-wp:active { cursor: grabbing; }
+
+.edge-ep {
+  fill: #a6e3a1;
+  stroke: #1e1e2e;
+  stroke-width: 1.5;
+  cursor: grab;
+  pointer-events: all;
+}
+.edge-ep:hover { fill: #f9e2af; r: 8; }
+.edge-ep:active { cursor: grabbing; }
 
 .port {
   fill: #89b4fa; stroke: #1e1e2e; stroke-width: 1.5;
-  cursor: crosshair; opacity: 0;
+  cursor: crosshair; opacity: 0; pointer-events: none;
   transition: opacity 0.15s;
 }
-.node-group:hover .port { opacity: 1; }
+.node-group:hover .port { opacity: 1; pointer-events: all; }
 .port:hover { fill: #f9e2af; r: 7; }
 
 #temp-edge { stroke: #f9e2af; stroke-width: 2; stroke-dasharray: 4 3; fill: none; pointer-events: none; }
