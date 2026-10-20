@@ -82,7 +82,10 @@
   <div class="toolbar">
     <button id="btn-format">Формат</button>
     <button id="btn-layout">Раскладка</button>
+    <button id="btn-export">Экспорт</button>
+    <button id="btn-import">Импорт</button>
     <button id="btn-clear">Очистить</button>
+    <input type="file" id="import-file" accept=".json,application/json" hidden />
   </div>
   <textarea id="code" spellcheck="false"></textarea>
 </div>
@@ -113,6 +116,7 @@
 <script src="js/render.js"></script>
 <script src="js/properties.js"></script>
 <script src="js/interactions.js"></script>
+<script src="js/io.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

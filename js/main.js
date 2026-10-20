@@ -50,6 +50,19 @@ window.DC = window.DC || {};
     DC.render();
   });
 
+  document.getElementById('btn-export').addEventListener('click', () => {
+    DC.exportJSON();
+  });
+
+  const importFile = document.getElementById('import-file');
+  document.getElementById('btn-import').addEventListener('click', () => {
+    importFile.click();
+  });
+  importFile.addEventListener('change', () => {
+    if (importFile.files[0]) DC.importJSON(importFile.files[0]);
+    importFile.value = '';
+  });
+
   document.getElementById('btn-clear').addEventListener('click', () => {
     if (!confirm('Очистить всё?')) return;
     state.classes = {}; state.nodes = {}; state.edges = []; state.selected = null;
