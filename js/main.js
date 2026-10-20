@@ -6,16 +6,48 @@ window.DC = window.DC || {};
   const codeEl = document.getElementById('code');
   const statusEl = document.getElementById('status');
 
+  function snapshotStyles() {
+    const unit = {};
+    [...Object.values(DC.state.classes), ...Object.values(DC.state.nodes)].forEach(u => {
+      if (u.id && u.style) unit['u' + u.id] = u.style;
+    });
+    DC.state.edges.forEach(ed => {
+      if (ed.style) {
+        const k = `e${ed.from}>${ed.to}`;
+        unit[k] = unit[k] || [];
+        unit[k].push({ style: ed.style, type: ed.type, label: ed.label, fromSide: ed.fromSide, toSide: ed.toSide });
+      }
+    });
+    return unit;
+  }
+
+  function restoreStyles(unit) {
+    [...Object.values(DC.state.classes), ...Object.values(DC.state.nodes)].forEach(u => {
+      const s = unit['u' + u.id];
+      if (s) u.style = s;
+    });
+    DC.state.edges.forEach(ed => {
+      const list = unit[`e${ed.from}>${ed.to}`];
+      if (!list || !list.length) return;
+      const exact = list.find(s => s.type === ed.type && s.label === ed.label
+        && s.fromSide === ed.fromSide && s.toSide === ed.toSide) || list[0];
+      ed.style = exact.style;
+      list.splice(list.indexOf(exact), 1);
+    });
+  }
+
   function parseAndRender() {
     const text = codeEl.value;
 
     try {
+      const prevStyles = snapshotStyles();
       const { classes, nodes, edges, errors, lastId } = DC.parseDSL(text);
 
       state.classes = classes;
       state.nodes = nodes;
       state.edges = edges;
       state.lastId = Math.max(state.lastId || 0, lastId || 0);
+      restoreStyles(prevStyles);
 
       if (errors.length) {
         statusEl.textContent = `⚠ ${errors.length}`;
@@ -67,6 +99,14 @@ window.DC = window.DC || {};
   document.getElementById('btn-clear').addEventListener('click', () => {
     if (!confirm('Очистить всё?')) return;
     state.classes = {}; state.nodes = {}; state.edges = []; state.selected = null; state.lastId = 0;
+    state.theme = DC.defaultTheme();
+    codeEl.value = '';
+    DC.render();
+  });
+
+  document.getElementById('btn-clear-canvas').addEventListener('click', () => {
+    if (!confirm('Очистить холст?')) return;
+    state.classes = {}; state.nodes = {}; state.edges = []; state.selected = null; state.lastId = 0;
     codeEl.value = '';
     DC.render();
   });
@@ -85,6 +125,16 @@ window.DC = window.DC || {};
     const panel = document.getElementById('spec-panel');
     const collapsed = panel.classList.toggle('collapsed');
     const btn = document.getElementById('toggle-spec');
+    btn.textContent = collapsed ? '▸' : '▾';
+    btn.title = collapsed ? 'Развернуть' : 'Свернуть';
+  });
+
+  document.getElementById('toggle-style').addEventListener('click', () => {
+    const panel = document.getElementById('style-panel');
+    if (panel.classList.contains('locked')) return;
+    const collapsed = panel.classList.toggle('collapsed');
+    DC._styleUserCollapsed = collapsed;
+    const btn = document.getElementById('toggle-style');
     btn.textContent = collapsed ? '▸' : '▾';
     btn.title = collapsed ? 'Развернуть' : 'Свернуть';
   });

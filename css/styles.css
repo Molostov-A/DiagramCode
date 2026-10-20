@@ -136,7 +136,7 @@ body.code-collapsed {
 .edge:hover .arrow { fill: #cdd5f9; }
 .edge.selected .arrow { fill: #f9e2af; }
 .edge.dashed path { stroke-dasharray: 5 4; }
-.edge-hit { fill: none; stroke: transparent; stroke-width: 22; cursor: pointer; }
+.edge path.edge-hit { fill: none; stroke: transparent; stroke-width: 22; cursor: pointer; }
 
 .edge-wp {
   fill: #89b4fa;
@@ -220,6 +220,44 @@ body.code-collapsed {
   cursor: pointer; font-weight: bold; margin-top: 12px;
 }
 .prop-delete:hover { background: #eba0ac; }
+
+/* ===== Оформление ===== */
+#style-panel { flex-shrink: 0; max-height: 45%; }
+#style-panel.collapsed #style-editor { display: none; }
+#style-panel.locked .panel-toggle { opacity: 0.35; cursor: default; }
+#style-panel.locked .panel-header > span:first-child { color: #6c7086; }
+#style-editor { padding: 8px 12px 12px; overflow-y: auto; font-size: 12px; }
+#style-editor .hint { color: #6c7086; font-style: italic; }
+.style-sec {
+  font-size: 10px; color: #a6adc8; text-transform: uppercase;
+  letter-spacing: 0.5px; margin: 12px 0 6px; border-bottom: 1px solid #313244;
+  padding-bottom: 2px;
+}
+.style-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.style-row label { flex: 1; margin-bottom: 0; }
+.style-row input[type="color"] {
+  width: 44px; height: 26px; padding: 0 2px; border: 1px solid #45475a;
+  border-radius: 4px; background: #181825; cursor: pointer;
+}
+.style-row input[type="color"][data-auto] { opacity: 0.4; }
+.style-row input[data-style] { flex: 0 0 auto; width: auto; }
+.style-row input[type="number"][data-style] { width: 72px; margin-left: auto; }
+.style-row select[data-el-style], .style-row select[data-theme] { margin-left: auto; width: auto; }
+.style-reset {
+  width: 24px; height: 26px; border: 1px solid #45475a; border-radius: 4px;
+  background: #181825; color: #a6adc8; cursor: pointer; font-size: 11px;
+}
+.style-reset:hover { background: #45475a; color: #f38ba8; }
+.palette-strip { display: flex; gap: 4px; margin-bottom: 6px; }
+.palette-strip i { flex: 1; height: 14px; border-radius: 3px; }
+.chk { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #cdd6f4; cursor: pointer; }
+.chk input { accent-color: #89b4fa; }
+.prop-reverse {
+  width: 100%; background: #313244; color: #cdd6f4;
+  border: 1px solid #45475a; padding: 8px; border-radius: 4px;
+  cursor: pointer; font-weight: bold; margin-top: 4px;
+}
+.prop-reverse:hover { background: #45475a; border-color: #89b4fa; }
 
 /* ===== Мобильная раскладка ===== */
 #backdrop { display: none; }

@@ -10,6 +10,7 @@ window.DC = window.DC || {};
   function el(tag, attrs = {}, parent) {
     const e = document.createElementNS(SVG_NS, tag);
     for (const [k, v] of Object.entries(attrs)) {
+      if (v === undefined || v === null) continue;
       if (k === 'text') e.textContent = v;
       else e.setAttribute(k, v);
     }
@@ -19,41 +20,127 @@ window.DC = window.DC || {};
 
   const measureText = (t, s = 12) => t.length * s * 0.62;
 
+  const FONT_STACKS = {
+    mono: "'JetBrains Mono','Consolas',monospace",
+    sans: "-apple-system,'Segoe UI',sans-serif",
+    serif: "Georgia,'Times New Roman',serif"
+  };
+
+  const PALETTE = [
+    '#f38ba8', '#fab387', '#f9e2af', '#a6e3a1', '#94e2d5', '#89dceb',
+    '#89b4fa', '#cba6f7', '#f5c2e7', '#eba0ac', '#b4befe', '#a6adc8'
+  ];
+
+  function paletteColor(id) {
+    return PALETTE[((id || 1) - 1) % PALETTE.length];
+  }
+
+  function num(v) {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : undefined;
+  }
+
+  const lineH = fs => fs + 4;
+
+  function nodeStyle(u) {
+    const t = DC.getTheme();
+    const ov = u.style || {};
+    const pick = (key) => ov[key] !== undefined ? ov[key] : t[key];
+    const fill = ov.fill !== undefined ? ov.fill : t.fill;
+    const stroke = ov.stroke !== undefined ? ov.stroke
+      : (t.paletteMode ? paletteColor(u.id) : t.stroke);
+    return {
+      fill: fill || undefined,
+      stroke: stroke || undefined,
+      strokeWidth: num(pick('strokeWidth')),
+      textColor: pick('textColor') || undefined,
+      fontSize: num(pick('fontSize')),
+      fontFamily: pick('fontFamily') || undefined,
+      bold: pick('bold') === true
+    };
+  }
+
+  function edgeStyle(edge) {
+    const t = DC.getTheme();
+    const ov = edge.style || {};
+    const pick = (key, themeKey) => ov[key] !== undefined ? ov[key] : t[themeKey || key];
+    const typeDashed = edge.type === 'flowDashed' || edge.type === 'dependency';
+    const baseDashed = t.edgeDashed === 'solid' ? false
+      : t.edgeDashed === 'dashed' ? true : typeDashed;
+    const dashed = ov.dashed === 'solid' ? false
+      : ov.dashed === 'dashed' ? true : baseDashed;
+    return {
+      color: pick('color', 'edgeColor') || undefined,
+      strokeWidth: num(pick('strokeWidth', 'edgeWidth')),
+      dashed,
+      textColor: pick('textColor') || undefined,
+      fontSize: num(pick('fontSize')),
+      fontFamily: pick('fontFamily') || undefined,
+      bold: pick('bold') === true
+    };
+  }
+
+  function boxStyleAttr(st) {
+    const m = [];
+    if (st.fill) m.push(`fill:${st.fill}`);
+    if (st.stroke) m.push(`stroke:${st.stroke}`);
+    if (st.strokeWidth !== undefined) m.push(`stroke-width:${st.strokeWidth}`);
+    return m.join(';');
+  }
+
+  function textStyleAttr(st) {
+    const m = [];
+    if (st.textColor) m.push(`fill:${st.textColor}`);
+    if (st.fontSize) m.push(`font-size:${st.fontSize}px`);
+    if (st.fontFamily && FONT_STACKS[st.fontFamily]) m.push(`font-family:${FONT_STACKS[st.fontFamily]}`);
+    if (st.bold) m.push('font-weight:bold');
+    return m.join(';');
+  }
+
   function getNode(name) { return state.classes[name] || state.nodes[name]; }
 
   function classBox(cls) {
-    const lineH = 16, titleH = 22;
+    const st = nodeStyle(cls);
+    const fs = st.fontSize || 12;
+    const lineH = fs + 4, titleH = fs + 10;
     const allMembers = [...cls.attributes, ...cls.methods];
     const width = Math.max(120,
-      measureText(cls.name, 13) + 30,
-      ...allMembers.map(m => measureText(m) + 20),
-      cls.stereotype ? measureText(`«${cls.stereotype}»`, 11) + 30 : 0
+      measureText(cls.name, fs + 1) + 30,
+      ...allMembers.map(m => measureText(m, fs) + 20),
+      cls.stereotype ? measureText(`«${cls.stereotype}»`, fs - 1) + 30 : 0
     );
-    const stereotypeH = cls.stereotype ? 14 : 0;
+    const stereotypeH = cls.stereotype ? fs + 2 : 0;
     const attrH = cls.attributes.length ? cls.attributes.length * lineH + 6 : 0;
     const methH = cls.methods.length ? cls.methods.length * lineH + 6 : 0;
     return { width, height: titleH + stereotypeH + attrH + methH + 4 };
   }
 
   function flowNodeBox(node) {
-    const labelW = measureText(node.name, 12);
-    const textW = node.text ? measureText(node.text, 12) : 0;
+    const st = nodeStyle(node);
+    const fs = st.fontSize || 12;
+    const labelW = measureText(node.name, fs);
+    const textW = node.text ? measureText(node.text, fs) : 0;
     const contentW = Math.max(labelW, textW);
+    const need = node.text ? fs * 2.6 + 16 : fs * 1.7 + 16;
     switch (node.type) {
-      case 'decision': return { width: Math.max(140, contentW + 60), height: Math.max(80, node.text ? 60 : 50) };
+      case 'decision': return { width: Math.max(140, contentW + 60), height: Math.max(80, need + 18) };
       case 'start': case 'end': case 'connector':
-        return { width: Math.max(120, contentW + 50), height: 44 };
-      case 'io': case 'data': return { width: Math.max(140, contentW + 50), height: 50 };
-      case 'prep': case 'manual': return { width: Math.max(140, contentW + 50), height: 52 };
-      case 'doc': return { width: Math.max(140, contentW + 40), height: 55 };
-      case 'note': return { width: Math.max(120, contentW + 30), height: 40 };
-      default: return { width: Math.max(130, contentW + 30), height: 50 };
+        return { width: Math.max(120, contentW + 50), height: Math.max(44, need) };
+      case 'io': case 'data': return { width: Math.max(140, contentW + 50), height: Math.max(50, need) };
+      case 'prep': case 'manual': return { width: Math.max(140, contentW + 50), height: Math.max(52, need) };
+      case 'doc': return { width: Math.max(140, contentW + 40), height: Math.max(55, need) };
+      case 'note': return { width: Math.max(120, contentW + 30), height: Math.max(40, need) };
+      default: return { width: Math.max(130, contentW + 30), height: Math.max(50, need) };
     }
   }
 
   function drawClass(cls) {
     const { width, height } = classBox(cls);
     cls._box = { width, height };
+    const st = nodeStyle(cls);
+    const fs = st.fontSize || 12;
+    const boxS = boxStyleAttr(st);
+    const textS = textStyleAttr(st);
 
     const g = el('g', {
       class: 'uml-class node-group', 'data-name': cls.name, 'data-kind': 'class',
@@ -61,26 +148,26 @@ window.DC = window.DC || {};
     }, canvas);
     if (state.selected?.kind === 'class' && state.selected.id === cls.name) g.classList.add('selected');
 
-    el('rect', { x: 0, y: 0, width, height, rx: 4 }, g);
+    el('rect', { x: 0, y: 0, width, height, rx: 4, style: boxS }, g);
 
-    let y = 16;
+    let y = fs + 4;
     if (cls.stereotype) {
-      el('text', { x: width/2, y, 'text-anchor': 'middle', class: 'stereotype', text: `«${cls.stereotype}»` }, g);
-      y += 14;
+      el('text', { x: width/2, y, 'text-anchor': 'middle', class: 'stereotype', style: textS, text: `«${cls.stereotype}»` }, g);
+      y += fs + 2;
     }
-    el('text', { x: width/2, y, 'text-anchor': 'middle', class: 'title', text: cls.name }, g);
+    el('text', { x: width/2, y, 'text-anchor': 'middle', class: 'title', style: textS, text: cls.name }, g);
     y += 6;
 
     if (cls.attributes.length) {
       el('line', { x1: 0, y1: y, x2: width, y2: y, class: 'divider' }, g);
-      y += 14;
-      cls.attributes.forEach(a => { el('text', { x: 8, y, text: a }, g); y += 16; });
+      y += fs + 2;
+      cls.attributes.forEach(a => { el('text', { x: 8, y, style: textS, text: a }, g); y += lineH(fs); });
       y -= 4;
     }
     if (cls.methods.length) {
       el('line', { x1: 0, y1: y, x2: width, y2: y, class: 'divider' }, g);
-      y += 14;
-      cls.methods.forEach(m => { el('text', { x: 8, y, text: m }, g); y += 16; });
+      y += fs + 2;
+      cls.methods.forEach(m => { el('text', { x: 8, y, style: textS, text: m }, g); y += lineH(fs); });
     }
 
     addPorts(g, cls, width, height);
@@ -90,6 +177,12 @@ window.DC = window.DC || {};
   function drawFlowNode(node) {
     const { width: w, height: h } = flowNodeBox(node);
     node._box = { width: w, height: h };
+    const st = nodeStyle(node);
+    const fs = st.fontSize || 12;
+    const boxS = boxStyleAttr(st);
+    const textS = textStyleAttr(st);
+    const yName = Math.round(fs * 0.33);
+    const yText = Math.round(fs * 1.17);
 
     const g = el('g', {
       class: `flow-node ${node.type} node-group node-body`,
@@ -98,7 +191,7 @@ window.DC = window.DC || {};
     }, canvas);
     if (state.selected?.kind === 'node' && state.selected.id === node.name) g.classList.add('selected');
 
-    const shape = el('g', { class: 'shape' }, g);
+    const shape = el('g', { class: 'shape', style: boxS }, g);
 
     switch (node.type) {
       case 'start': case 'end':
@@ -124,8 +217,8 @@ window.DC = window.DC || {};
       }
       case 'predef':
         el('rect', { x: 0, y: 0, width: w, height: h }, shape);
-        el('line', { x1: 6, y1: 0, x2: 6, y2: h, stroke: '#a6e3a1', 'stroke-width': 1.5 }, shape);
-        el('line', { x1: w-6, y1: 0, x2: w-6, y2: h, stroke: '#a6e3a1', 'stroke-width': 1.5 }, shape);
+        el('line', { x1: 6, y1: 0, x2: 6, y2: h, style: `stroke:${st.stroke || '#a6e3a1'}${st.strokeWidth !== undefined ? `;stroke-width:${st.strokeWidth}` : ''}` }, shape);
+        el('line', { x1: w-6, y1: 0, x2: w-6, y2: h, style: `stroke:${st.stroke || '#a6e3a1'}${st.strokeWidth !== undefined ? `;stroke-width:${st.strokeWidth}` : ''}` }, shape);
         break;
       case 'connector':
         el('circle', { cx: w/2, cy: h/2, r: Math.min(w, h)/2 }, shape); break;
@@ -137,22 +230,22 @@ window.DC = window.DC || {};
 
     if (node.type === 'decision') {
       if (node.text) {
-        el('text', { x: w/2, y: h/2 - 4, 'text-anchor': 'middle', class: 'node-label', text: node.name }, g);
-        el('text', { x: w/2, y: h/2 + 14, 'text-anchor': 'middle', text: node.text }, g);
+        el('text', { x: w/2, y: h/2 - yName, 'text-anchor': 'middle', class: 'node-label', style: textS, text: node.name }, g);
+        el('text', { x: w/2, y: h/2 + yText, 'text-anchor': 'middle', style: textS, text: node.text }, g);
       } else {
-        el('text', { x: w/2, y: h/2 + 4, 'text-anchor': 'middle', class: 'node-label', text: node.name }, g);
+        el('text', { x: w/2, y: h/2 + yName, 'text-anchor': 'middle', class: 'node-label', style: textS, text: node.name }, g);
       }
     } else if (node.type === 'connector') {
-      el('text', { x: w/2, y: h/2 + 4, 'text-anchor': 'middle', class: 'node-label', text: node.name }, g);
+      el('text', { x: w/2, y: h/2 + yName, 'text-anchor': 'middle', class: 'node-label', style: textS, text: node.name }, g);
     } else if (node.type === 'note') {
-      el('text', { x: 18, y: h/2 + 4, class: 'node-label', text: node.name }, g);
-      if (node.text) el('text', { x: 18 + measureText(node.name) + 8, y: h/2 + 4, text: ': ' + node.text }, g);
+      el('text', { x: 18, y: h/2 + yName, class: 'node-label', style: textS, text: node.name }, g);
+      if (node.text) el('text', { x: 18 + measureText(node.name, fs) + 8, y: h/2 + yName, style: textS, text: ': ' + node.text }, g);
     } else {
       if (node.text) {
-        el('text', { x: w/2, y: h/2 - 4, 'text-anchor': 'middle', class: 'node-label', text: node.name }, g);
-        el('text', { x: w/2, y: h/2 + 14, 'text-anchor': 'middle', text: node.text }, g);
+        el('text', { x: w/2, y: h/2 - yName, 'text-anchor': 'middle', class: 'node-label', style: textS, text: node.name }, g);
+        el('text', { x: w/2, y: h/2 + yText, 'text-anchor': 'middle', style: textS, text: node.text }, g);
       } else {
-        el('text', { x: w/2, y: h/2 + 4, 'text-anchor': 'middle', class: 'node-label', text: node.name }, g);
+        el('text', { x: w/2, y: h/2 + yName, 'text-anchor': 'middle', class: 'node-label', style: textS, text: node.name }, g);
       }
     }
 
@@ -306,23 +399,30 @@ window.DC = window.DC || {};
 
     const { d, prev, pts } = buildEdgePath(edge, a, b, aBox, bBox, p1, p2);
     const isFlow = edge.type === 'flow' || edge.type === 'flowDashed';
-    const cls = 'edge' + ((edge.type === 'flowDashed' || edge.type === 'dependency') ? ' dashed' : '');
+    const st = edgeStyle(edge);
+    const cls = 'edge' + (st.dashed ? ' dashed' : '');
 
     const g = el('g', { class: cls, 'data-idx': idx }, canvas);
     const isSelected = state.selected?.kind === 'edge' && state.selected.id === idx;
     if (isSelected) g.classList.add('selected');
 
-    el('path', { d, class: 'edge-hit' }, g);
-    el('path', { d }, g);
+    const pathS = [];
+    if (st.color) pathS.push(`stroke:${st.color}`);
+    if (st.strokeWidth !== undefined) pathS.push(`stroke-width:${st.strokeWidth}`);
+    const labelS = textStyleAttr(st);
+    const arrowColor = st.color || '#a6adc8';
 
-    if (isFlow) drawArrowOpen(g, prev, p2);
-    else if (edge.type === 'inherit') drawArrowTriangle(g, prev, p2, true);
-    else if (edge.type === 'composition') drawArrowDiamond(g, prev, p2, true);
-    else if (edge.type === 'aggregation') drawArrowDiamond(g, prev, p2, false);
-    else drawArrowOpen(g, prev, p2);
+    el('path', { d, class: 'edge-hit' }, g);
+    el('path', { d, style: pathS.join(';') || undefined }, g);
+
+    if (isFlow) drawArrowOpen(g, prev, p2, arrowColor);
+    else if (edge.type === 'inherit') drawArrowTriangle(g, prev, p2, true, arrowColor);
+    else if (edge.type === 'composition') drawArrowDiamond(g, prev, p2, true, arrowColor);
+    else if (edge.type === 'aggregation') drawArrowDiamond(g, prev, p2, false, arrowColor);
+    else drawArrowOpen(g, prev, p2, arrowColor);
 
     if (edge.label) {
-      el('text', { x: (p1.x+p2.x)/2, y: (p1.y+p2.y)/2 - 6, 'text-anchor': 'middle', text: edge.label }, g);
+      el('text', { x: (p1.x+p2.x)/2, y: (p1.y+p2.y)/2 - 6, 'text-anchor': 'middle', style: labelS || undefined, text: edge.label }, g);
     }
 
     if (isSelected && edge.route) {
@@ -368,7 +468,7 @@ window.DC = window.DC || {};
     return { x: cx + dx*s, y: cy + dy*s };
   }
 
-  function drawArrowOpen(g, p1, p2) {
+  function drawArrowOpen(g, p1, p2, color) {
     const dx = p2.x - p1.x, dy = p2.y - p1.y;
     const len = Math.hypot(dx, dy) || 1;
     const size = 10;
@@ -376,11 +476,11 @@ window.DC = window.DC || {};
     const a2 = Math.atan2(-dy, -dx) - Math.PI/6;
     el('polygon', {
       points: `${p2.x},${p2.y} ${p2.x + Math.cos(a1)*size},${p2.y + Math.sin(a1)*size} ${p2.x + Math.cos(a2)*size},${p2.y + Math.sin(a2)*size}`,
-      class: 'arrow'
+      class: 'arrow', style: `fill:${color}`
     }, g);
   }
 
-  function drawArrowTriangle(g, p1, p2, hollow) {
+  function drawArrowTriangle(g, p1, p2, hollow, color) {
     const dx = p2.x - p1.x, dy = p2.y - p1.y;
     const len = Math.hypot(dx, dy) || 1;
     const ux = dx/len, uy = dy/len;
@@ -389,12 +489,11 @@ window.DC = window.DC || {};
     const px = -uy*size*0.6, py = ux*size*0.6;
     el('polygon', {
       points: `${p2.x},${p2.y} ${bx+px},${by+py} ${bx-px},${by-py}`,
-      class: 'arrow', fill: hollow ? '#1e1e2e' : '#a6adc8',
-      stroke: '#a6adc8', 'stroke-width': 1.4
+      class: 'arrow', style: `fill:${hollow ? '#1e1e2e' : color};stroke:${color};stroke-width:1.4`
     }, g);
   }
 
-  function drawArrowDiamond(g, p1, p2, filled) {
+  function drawArrowDiamond(g, p1, p2, filled, color) {
     const dx = p2.x - p1.x, dy = p2.y - p1.y;
     const len = Math.hypot(dx, dy) || 1;
     const ux = dx/len, uy = dy/len;
@@ -404,9 +503,40 @@ window.DC = window.DC || {};
     const tx = p2.x - ux*size*2, ty = p2.y - uy*size*2;
     el('polygon', {
       points: `${p2.x},${p2.y} ${bx+px},${by+py} ${tx},${ty} ${bx-px},${by-py}`,
-      class: 'arrow', fill: filled ? '#a6adc8' : '#1e1e2e',
-      stroke: '#a6adc8', 'stroke-width': 1.4
+      class: 'arrow', style: `fill:${filled ? color : '#1e1e2e'};stroke:${color};stroke-width:1.4`
     }, g);
+  }
+
+  function syncStylePanel(hasSelection) {
+    const panel = document.getElementById('style-panel');
+    if (!panel) return;
+    const collapsed = hasSelection || DC._styleUserCollapsed === true;
+    panel.classList.toggle('collapsed', collapsed);
+    panel.classList.toggle('locked', hasSelection);
+    const btn = document.getElementById('toggle-style');
+    if (btn) {
+      btn.textContent = collapsed ? '▸' : '▾';
+      btn.title = hasSelection ? 'Снимите выделение, чтобы изменить оформление' : 'Свернуть';
+    }
+  }
+
+  let lastSelKey;
+  function renderPropsIfNeeded() {
+    const selKey = state.selected ? state.selected.kind + ':' + state.selected.id : '';
+    syncStylePanel(!!state.selected);
+    if (selKey === lastSelKey) return;
+    lastSelKey = selKey;
+    const active = document.activeElement;
+    const aid = active && active.id;
+    const pos = active && typeof active.selectionStart === 'number' ? active.selectionStart : null;
+    DC.renderProperties();
+    if (aid) {
+      const el2 = document.getElementById(aid);
+      if (el2 && el2.focus) {
+        el2.focus();
+        if (pos !== null) { try { el2.setSelectionRange(pos, pos); } catch (e) {} }
+      }
+    }
   }
 
   function render() {
@@ -440,13 +570,20 @@ window.DC = window.DC || {};
       }
     }
 
-    DC.renderProperties();
+    renderPropsIfNeeded();
     DC.renderSpec();
+    if (DC.renderStyleEditor) {
+      const se = document.getElementById('style-editor');
+      const ae = document.activeElement;
+      if (!se || !ae || !se.contains(ae)) DC.renderStyleEditor();
+    }
   }
 
   Object.assign(DC, {
     SVG_NS, canvas, canvasWrap, el, measureText, getNode,
     classBox, flowNodeBox, drawClass, drawFlowNode, addPorts,
-    drawEdge, intersectBoundary, sidePoint, nearestSide, render
+    drawEdge, intersectBoundary, sidePoint, nearestSide, render,
+    nodeStyle, edgeStyle, paletteColor, boxStyleAttr, textStyleAttr,
+    FONT_STACKS, PALETTE
   });
 })();

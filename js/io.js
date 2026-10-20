@@ -14,24 +14,33 @@ window.DC = window.DC || {};
       out.type = n.type;
       out.text = n.text || '';
     }
+    if (n.style && Object.keys(n.style).length) out.style = n.style;
     return out;
   }
 
   function exportJSON() {
+    const theme = DC.getTheme();
+    const hasTheme = JSON.stringify(theme) !== JSON.stringify(DC.defaultTheme());
     const data = {
       format: 'DiagramCode',
-      version: 2,
+      version: 3,
       lastId: state.lastId,
+      theme: hasTheme ? theme : undefined,
       classes: Object.values(state.classes).map(stripNode),
       nodes: Object.values(state.nodes).map(stripNode),
-      edges: state.edges.map(ed => ({
-        from: ed.from, fromSide: ed.fromSide || null,
-        to: ed.to, toSide: ed.toSide || null,
-        type: ed.type, route: ed.route || null,
-        pts: ed.ptsCustom && ed.pts ? ed.pts.map(p => ({ x: Math.round(p.x), y: Math.round(p.y) })) : null,
-        label: ed.label || ''
-      }))
+      edges: state.edges.map(ed => {
+        const e = {
+          from: ed.from, fromSide: ed.fromSide || null,
+          to: ed.to, toSide: ed.toSide || null,
+          type: ed.type, route: ed.route || null,
+          pts: ed.ptsCustom && ed.pts ? ed.pts.map(p => ({ x: Math.round(p.x), y: Math.round(p.y) })) : null,
+          label: ed.label || ''
+        };
+        if (ed.style && Object.keys(ed.style).length) e.style = ed.style;
+        return e;
+      })
     };
+    if (data.theme === undefined) delete data.theme;
 
     const name = prompt('Имя файла:', suggestedName());
     if (name === null) return;
@@ -81,7 +90,8 @@ window.DC = window.DC || {};
           kind: 'class', id, name: c.name, stereotype: c.stereotype || '',
           attributes: Array.isArray(c.attributes) ? c.attributes : [],
           methods: Array.isArray(c.methods) ? c.methods : [],
-          x: c.x || 100, y: c.y || 100
+          x: c.x || 100, y: c.y || 100,
+          style: (c.style && typeof c.style === 'object') ? c.style : null
         };
       });
       data.nodes.forEach(n => {
@@ -90,7 +100,8 @@ window.DC = window.DC || {};
         if (id > maxId) maxId = id;
         nodes[n.name] = {
           kind: 'node', id, type: n.type, name: n.name, text: n.text || '',
-          x: n.x || 100, y: n.y || 100
+          x: n.x || 100, y: n.y || 100,
+          style: (n.style && typeof n.style === 'object') ? n.style : null
         };
       });
 
@@ -101,12 +112,16 @@ window.DC = window.DC || {};
         type: ed.type || 'flow', route: ed.route || null,
         pts: Array.isArray(ed.pts) ? ed.pts : null,
         ptsCustom: Array.isArray(ed.pts),
-        label: ed.label || ''
+        label: ed.label || '',
+        style: (ed.style && typeof ed.style === 'object') ? ed.style : null
       }));
 
       state.classes = classes;
       state.nodes = nodes;
       state.edges = edges;
+      state.theme = (data.theme && typeof data.theme === 'object')
+        ? Object.assign(DC.defaultTheme(), data.theme)
+        : DC.defaultTheme();
       state.lastId = Math.max(data.lastId || 0, maxId);
       state.selected = null;
       DC.updateCodeFromState();

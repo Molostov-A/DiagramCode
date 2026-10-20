@@ -57,6 +57,196 @@ DC.renderSpec = function () {
   });
 };
 
+DC.renderStyleEditor = function () {
+  const container = document.getElementById('style-editor');
+  if (!container) return;
+  if (!DC.state.theme) DC.state.theme = {};
+  const t = DC.state.theme;
+
+  container.innerHTML = `
+    <label class="chk"><input type="checkbox" id="theme-palette" ${t.paletteMode ? 'checked' : ''}> Режим палитры (уникальный цвет обводки)</label>
+    <div class="style-sec">Блоки</div>
+    ${colorRow('Заливка', 'fill', t.fill)}
+    ${colorRow('Обводка', 'stroke', t.stroke)}
+    ${numRow('Толщина обводки', 'strokeWidth', t.strokeWidth, 0.5)}
+    <div class="style-sec">Текст</div>
+    ${colorRow('Цвет текста', 'textColor', t.textColor)}
+    ${numRow('Размер', 'fontSize', t.fontSize, 1)}
+    <div class="prop-group">
+      <label>Гарнитура</label>
+      <select data-theme="fontFamily">
+        <option value="" ${!t.fontFamily ? 'selected' : ''}>по умолчанию</option>
+        <option value="mono" ${t.fontFamily === 'mono' ? 'selected' : ''}>моноширинная</option>
+        <option value="sans" ${t.fontFamily === 'sans' ? 'selected' : ''}>без засечек</option>
+        <option value="serif" ${t.fontFamily === 'serif' ? 'selected' : ''}>с засечками</option>
+      </select>
+    </div>
+    <label class="chk"><input type="checkbox" id="theme-bold" ${t.bold ? 'checked' : ''}> Жирный текст</label>
+    <div class="style-sec">Связи</div>
+    ${colorRow('Цвет линий', 'edgeColor', t.edgeColor)}
+    ${numRow('Толщина', 'edgeWidth', t.edgeWidth, 0.5)}
+    <div class="prop-group">
+      <label>Штрих</label>
+      <select data-theme="edgeDashed">
+        <option value="" ${!t.edgeDashed ? 'selected' : ''}>по типу связи</option>
+        <option value="solid" ${t.edgeDashed === 'solid' ? 'selected' : ''}>сплошные</option>
+        <option value="dashed" ${t.edgeDashed === 'dashed' ? 'selected' : ''}>пунктир</option>
+      </select>
+    </div>
+    <div class="style-sec">Палитра</div>
+    <div class="palette-strip">${DC.PALETTE.map(c => `<i style="background:${c}"></i>`).join('')}</div>
+    <button class="prop-delete" id="theme-reset">Сбросить оформление</button>
+  `;
+
+  document.getElementById('theme-palette').onchange = e => {
+    t.paletteMode = e.target.checked;
+    DC.updateCodeFromState();
+    DC.render();
+  };
+  document.getElementById('theme-bold').onchange = e => {
+    t.bold = e.target.checked;
+    DC.updateCodeFromState();
+    DC.render();
+  };
+  document.getElementById('theme-reset').onclick = () => {
+    DC.state.theme = DC.defaultTheme();
+    Object.values(DC.state.classes).forEach(c => c.style = null);
+    Object.values(DC.state.nodes).forEach(n => n.style = null);
+    DC.state.edges.forEach(e => e.style = null);
+    DC.updateCodeFromState();
+    DC.render();
+    DC.renderStyleEditor();
+  };
+  bindStyleInputs(container, t, 'theme');
+};
+
+function colorRow(label, key, val) {
+  return `<div class="prop-group style-row">
+    <label>${label}</label>
+    <input type="color" class="style-color" data-style="${key}" value="${val || '#cdd6f4'}" ${val ? '' : 'data-auto="1"'} title="${val ? val : 'по умолчанию'} — клик для своего цвета, ✕ чтобы вернуть" />
+    <button type="button" class="style-reset" data-style-reset="${key}" title="Вернуть значение по умолчанию">✕</button>
+  </div>`;
+}
+
+function numRow(label, key, val, step) {
+  return `<div class="prop-group style-row">
+    <label>${label}</label>
+    <input type="number" class="style-num" data-style="${key}" value="${val ?? ''}" step="${step}" placeholder="авто" min="0" />
+    <button type="button" class="style-reset" data-style-reset="${key}" title="Вернуть значение по умолчанию">✕</button>
+  </div>`;
+}
+
+function bindStyleInputs(root, target, prefix) {
+  root.querySelectorAll('.style-color').forEach(inp => {
+    inp.onclick = () => { if (inp.dataset.auto) inp.removeAttribute('data-auto'); };
+    inp.oninput = () => {
+      target[inp.dataset.style] = inp.value;
+      inp.removeAttribute('data-auto');
+      inp.title = inp.value;
+      DC.updateCodeFromState();
+      DC.render();
+    };
+  });
+  root.querySelectorAll('.style-num').forEach(inp => {
+    inp.oninput = () => {
+      const v = parseFloat(inp.value);
+      if (Number.isFinite(v)) target[inp.dataset.style] = v;
+      else delete target[inp.dataset.style];
+      DC.updateCodeFromState();
+      DC.render();
+    };
+  });
+  root.querySelectorAll('select[data-theme]').forEach(sel => {
+    sel.onchange = () => {
+      target[sel.dataset.theme] = sel.value || null;
+      DC.updateCodeFromState();
+      DC.render();
+    };
+  });
+  root.querySelectorAll('[data-style-reset]').forEach(btn => {
+    btn.onclick = () => {
+      delete target[btn.dataset.styleReset];
+      DC.updateCodeFromState();
+      DC.render();
+      if (prefix === 'theme') DC.renderStyleEditor();
+      else DC.renderProperties();
+    };
+  });
+}
+
+function elementStyleSection(style, hasColor) {
+  style = style || {};
+  const rows = [];
+  if (hasColor) {
+    rows.push(colorRow('Заливка', 'fill', style.fill));
+    rows.push(colorRow('Обводка', 'stroke', style.stroke));
+    rows.push(numRow('Толщина обводки', 'strokeWidth', style.strokeWidth, 0.5));
+  } else {
+    rows.push(colorRow('Цвет линии', 'color', style.color));
+    rows.push(numRow('Толщина', 'strokeWidth', style.strokeWidth, 0.5));
+    rows.push(`<div class="prop-group">
+      <label>Штрих</label>
+      <select data-el-style="dashed">
+        <option value="" ${!style.dashed ? 'selected' : ''}>по теме</option>
+        <option value="solid" ${style.dashed === 'solid' ? 'selected' : ''}>сплошная</option>
+        <option value="dashed" ${style.dashed === 'dashed' ? 'selected' : ''}>пунктир</option>
+      </select>
+    </div>`);
+  }
+  rows.push(colorRow('Цвет текста', 'textColor', style.textColor));
+  rows.push(numRow('Размер текста', 'fontSize', style.fontSize, 1));
+  rows.push(`<div class="prop-group">
+    <label>Гарнитура</label>
+    <select data-el-style="fontFamily">
+      <option value="" ${!style.fontFamily ? 'selected' : ''}>по теме</option>
+      <option value="mono" ${style.fontFamily === 'mono' ? 'selected' : ''}>моноширинная</option>
+      <option value="sans" ${style.fontFamily === 'sans' ? 'selected' : ''}>без засечек</option>
+      <option value="serif" ${style.fontFamily === 'serif' ? 'selected' : ''}>с засечками</option>
+    </select>
+  </div>
+  <label class="chk"><input type="checkbox" data-el-bold ${style.bold ? 'checked' : ''}> Жирный текст</label>`);
+  rows.push(`<button type="button" class="prop-delete" data-el-style-reset>Сбросить стиль</button>`);
+  return `<div class="style-sec">Стиль элемента</div>${rows.join('')}`;
+}
+
+function bindElementStyle(getObj, hasColor) {
+  const container = document.getElementById('properties');
+  const ensure = () => { const o = getObj(); if (!o.style) o.style = {}; return o; };
+  const doRender = () => { DC.updateCodeFromState(); DC.render(); };
+  container.querySelectorAll('.style-color').forEach(inp => {
+    inp.onclick = () => { if (inp.dataset.auto) inp.removeAttribute('data-auto'); };
+    inp.oninput = () => { ensure().style[inp.dataset.style] = inp.value; inp.removeAttribute('data-auto'); doRender(); };
+  });
+  container.querySelectorAll('.style-num').forEach(inp => {
+    inp.oninput = () => {
+      const v = parseFloat(inp.value);
+      const o = ensure();
+      if (Number.isFinite(v)) o.style[inp.dataset.style] = v;
+      else delete o.style[inp.dataset.style];
+      doRender();
+    };
+  });
+  container.querySelectorAll('select[data-el-style]').forEach(sel => {
+    sel.onchange = () => {
+      const o = ensure();
+      if (sel.value) o.style[sel.dataset.elStyle] = sel.value;
+      else delete o.style[sel.dataset.elStyle];
+      doRender();
+    };
+  });
+  container.querySelectorAll('[data-el-bold]').forEach(chk => {
+    chk.onchange = () => {
+      const o = ensure();
+      if (chk.checked) o.style.bold = true;
+      else delete o.style.bold;
+      doRender();
+    };
+  });
+  container.querySelectorAll('[data-el-style-reset]').forEach(btn => {
+    btn.onclick = () => { getObj().style = null; DC.updateCodeFromState(); DC.render(); DC.renderProperties(); };
+  });
+}
+
 function renderSpecEdges() {
   const state = DC.state;
   const all = { ...state.classes, ...state.nodes };
@@ -97,7 +287,6 @@ DC.renderProperties = function () {
     container.innerHTML = '<div class="hint">Выберите узел или связь на холсте</div>';
     return;
   }
-
   const { kind, id } = state.selected;
 
   if (kind === 'class') {
@@ -124,9 +313,11 @@ DC.renderProperties = function () {
         <label>Методы (по одному на строку)</label>
         <textarea id="prop-methods" class="members">${DC.escapeHtml(cls.methods.join('\n'))}</textarea>
       </div>
+      ${elementStyleSection(cls.style, true)}
       <button class="prop-delete" id="prop-delete">Удалить класс</button>
     `;
     bindClassProps(cls);
+    bindElementStyle(() => state.classes[cls.name], true);
   }
 
   if (kind === 'node') {
@@ -151,9 +342,11 @@ DC.renderProperties = function () {
         <label>Содержимое</label>
         <input id="prop-text" value="${DC.escapeHtml(node.text)}" placeholder="текст внутри" />
       </div>
+      ${elementStyleSection(node.style, true)}
       <button class="prop-delete" id="prop-delete">Удалить узел</button>
     `;
     bindNodeProps(node);
+    bindElementStyle(() => state.nodes[node.name], true);
   }
 
   if (kind === 'edge') {
@@ -199,10 +392,13 @@ DC.renderProperties = function () {
         <label>Подпись</label>
         <input id="prop-edge-label" value="${DC.escapeHtml(ed.label)}" placeholder="например: да / нет" />
       </div>
+      <button class="prop-reverse" id="prop-edge-reverse" title="Поменять местами источника и цель">⇄ Поменять направление</button>
+      ${elementStyleSection(ed.style, false)}
       <button class="prop-delete" id="prop-edge-reset">Сбросить настройки</button>
       <button class="prop-delete" id="prop-delete">Удалить связь</button>
     `;
     bindEdgeProps(ed);
+    bindElementStyle(() => state.edges[state.selected.id], false);
   }
 };
 
@@ -313,6 +509,15 @@ function bindEdgeProps(ed) {
     ed.label = e.target.value;
     DC.updateCodeFromState();
     DC.render();
+  };
+  document.getElementById('prop-edge-reverse').onclick = () => {
+    const tmp = ed.from, tmpSide = ed.fromSide;
+    ed.from = ed.to; ed.fromSide = ed.toSide;
+    ed.to = tmp; ed.toSide = tmpSide;
+    ed.pts = null;
+    DC.updateCodeFromState();
+    DC.render();
+    DC.renderProperties();
   };
   document.getElementById('prop-edge-reset').onclick = () => {
     ed.fromSide = null;

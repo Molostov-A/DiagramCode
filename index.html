@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>UML + Flowchart Visual Editor</title>
+<title>DiagramCode — визуальный редактор диаграмм</title>
+<link rel="icon" type="image/svg+xml" href="resurses/icon_diagram.svg">
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="code-collapsed">
@@ -97,6 +98,7 @@
   <div class="panel-header">
     <span>Холст</span>
     <span class="canvas-hint">перетащи из палитры · тяни от порта для связи</span>
+    <button id="btn-clear-canvas" class="panel-toggle" title="Очистить холст">🗑</button>
   </div>
   <div id="canvas-wrap">
     <svg id="canvas" width="4000" height="4000"></svg>
@@ -111,6 +113,15 @@
     <div id="properties">
       <div class="hint">Выберите узел или связь на холсте</div>
     </div>
+  </div>
+
+  <!-- ========== ОФОРМЛЕНИЕ ========== -->
+  <div class="panel" id="style-panel">
+    <div class="panel-header">
+      <span>Оформление</span>
+      <button id="toggle-style" class="panel-toggle" title="Свернуть">▾</button>
+    </div>
+    <div id="style-editor"><div class="hint">Настройки всей схемы</div></div>
   </div>
 
   <!-- ========== СПЕЦИФИКАЦИЯ ========== -->
