@@ -429,7 +429,7 @@ body.light .flow-node.connector .shape { stroke: #d20f39; }
 body.light .uml-class.selected rect,
 body.light .flow-node.selected .shape { stroke: #df8e1d; stroke-width: 2.5; }
 body.light .node-id { fill: #9ca0b0; }
-body.light .edge path { stroke: #6c6f85; }
+body.light .edge path:not(.edge-hit) { stroke: #6c6f85; }
 body.light .edge:hover path:not(.edge-hit) { stroke: #1e66f5; }
 body.light .edge.selected path:not(.edge-hit) { stroke: #df8e1d; }
 body.light .edge text { fill: #6c6f85; }
